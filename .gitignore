@@ -1,0 +1,16 @@
+# secrets — NEVER commit these
+.env
+*.key
+
+# python junk
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# mac junk
+.DS_Store
+
+# editor junk
+.vscode/
+.idea/
