@@ -17,10 +17,15 @@ search_results = tavily.search(
     max_results=5
 )
 
-# combine all the result text into one big blob
+# step 1.5: extract full content from each result url
+print("📄 extracting full page content from each result...")
+urls_to_extract = [r["url"] for r in search_results["results"]]
+extracted = tavily.extract(urls=urls_to_extract)
+
+# combine all extracted page text into one big blob
 combined_text = ""
-for r in search_results["results"]:
-    combined_text += f"TITLE: {r['title']}\nURL: {r['url']}\nCONTENT: {r['content']}\n\n"
+for page in extracted["results"]:
+    combined_text += f"URL: {page['url']}\nCONTENT: {page['raw_content'][:3000]}\n\n"
 
 # step 2: ask gemini to extract company names from the blob
 print("🧠 asking gemini to extract companies...")
