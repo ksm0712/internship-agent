@@ -26,19 +26,39 @@ for r in search_results["results"]:
 print("🧠 asking gemini to extract companies...")
 prompt = f"""
 Below are web search results about startups hiring summer 2026 interns.
-Extract a clean list of company names that are explicitly mentioned as hiring interns.
+Extract a clean list of companies explicitly mentioned as hiring interns.
 
-For each company, give me:
-- Company name
-- One-line description (if available)
-- The source URL where it was mentioned
+Respond ONLY with valid JSON in this exact format, no other text:
+[
+  {{
+    "name": "Company Name",
+    "description": "One-line description",
+    "source_url": "URL where mentioned"
+  }}
+]
 
-Format your response as a numbered list. Only include companies you're confident about.
+Only include companies you're confident about. No markdown, no commentary, just JSON.
 
 SEARCH RESULTS:
 {combined_text}
 """
 
+import json
+
 response = model.generate_content(prompt)
-print("\n✅ companies found:\n")
-print(response.text)
+
+# clean up — sometimes gemini wraps json in ```json ... ``` markdown
+raw = response.text.strip()
+if raw.startswith("```"):
+    raw = raw.split("```")[1]  # take whats between the fences
+    if raw.startswith("json"):
+        raw = raw[4:]  # remove "json" label
+    raw = raw.strip()
+
+# parse it into actual python data
+companies = json.loads(raw)
+
+print(f"\n✅ found {len(companies)} companies:\n")
+for c in companies:
+    print(f"- {c['name']}: {c['description']}")
+    print(f"  ↳ {c['source_url']}\n")
