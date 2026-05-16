@@ -62,3 +62,9 @@ print(f"\n✅ found {len(companies)} companies:\n")
 for c in companies:
     print(f"- {c['name']}: {c['description']}")
     print(f"  ↳ {c['source_url']}\n")
+
+# save companies to a file for the next step
+with open("companies.json", "w") as f:
+    json.dump(companies, f, indent=2)
+
+print(f"\n💾 saved to companies.json")
