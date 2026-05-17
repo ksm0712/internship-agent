@@ -1,52 +1,310 @@
 [
   {
-    "name": "ThirdLayer",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "MUFG",
+    "description": "Hiring AI Interns.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/ai-intern-at-mufg-4414488585?position=1&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=zQwo8FoxYJkEmVHWmdfr4Q%3D%3D",
+    "official_url": null
   },
   {
-    "name": "SubImage",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "Cr\u00e9dit Agricole CIB",
+    "description": "Hiring Data Scientist Intern (Full time, Jul-Dec 2026).",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/data-scientist-intern-full-time-jul-dec-2026-at-cr%C3%A9dit-agricole-cib-4412650117?position=2&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=8AwcpHSu7l7mM%2BmDe8wVNw%3D%3D",
+    "official_url": null
   },
   {
-    "name": "Bild AI",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "Seagate Technology",
+    "description": "Hiring Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/data-science-intern-at-seagate-technology-4285856896?position=3&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=Va8R4oZKsbQVzvWQn6K87w%3D%3D",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
   },
   {
-    "name": "Mesh",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "AUMOVIO",
+    "description": "Hiring Artificial Intelligence Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/artificial-intelligence-intern-ida-00029-at-aumovio-4301755988?position=4&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=W1G7SbbQu8kDWymJhcKm8Q%3D%3D",
+    "official_url": null
   },
   {
-    "name": "a0.dev",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "Razer Inc.",
+    "description": "Hiring AI Engineer Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/ai-engineer-intern-at-razer-inc-4414632613?position=5&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=mv5fyx6FPKnQ66NpEDPmvA%3D%3D",
+    "official_url": "https://www.linkedin.com/company/razer"
   },
   {
-    "name": "Mosaic",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "Infineon Technologies",
+    "description": "Hiring Internship - Data Scientist.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/internship-data-scientist-at-infineon-technologies-4399889792?position=6&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=sI%2B9zGDswFsuWK9HMzwMDA%3D%3D",
+    "official_url": "https://de.linkedin.com/company/infineon-technologies"
   },
   {
-    "name": "Waypoint Transit",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "Seagate Technology",
+    "description": "Hiring Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/data-science-intern-at-seagate-technology-4377361623?position=7&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=WUvFATscT1fpYL8Wn%2FuXVQ%3D%3D",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
   },
   {
-    "name": "Cuckoo",
-    "description": "YC W25 startup.",
-    "source_url": "https://www.linkedin.com/posts/chris-pisarski_8-yc-companies-hiring-swe-summer-2026-interns-activity-7413278114421657600-nKFf"
+    "name": "BeeX",
+    "description": "Hiring Robotics Software Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/robotics-software-intern-at-beex-4378943448?position=8&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=wymM3BB82ktjV5ypTFramQ%3D%3D",
+    "official_url": "https://sg.linkedin.com/company/beexsg"
   },
   {
-    "name": "Candle",
-    "description": "Helps friends and couples grow closer daily in just 5 minutes.",
-    "source_url": "https://www.ycombinator.com/companies/candle/jobs/VvOMLDD-software-engineering-intern-summer-2026"
+    "name": "Seagate Technology",
+    "description": "Hiring Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/data-science-intern-at-seagate-technology-4384018678?position=9&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=9ePAX6wv7bOEjOL%2BFmU7Ag%3D%3D",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
   },
   {
-    "name": "Browser Use",
-    "description": "Leading open-source web agent project with 50k stars in 3 months.",
-    "source_url": "https://www.ycombinator.com/companies/browser-use/jobs/JwGWpEP-summer-software-engineering-intern-now-and-summer-2026"
+    "name": "IBM",
+    "description": "Hiring Data Scientist-Artificial Intelligence Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/data-scientist-artificial-intelligence-intern-at-ibm-4384787565?position=10&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=SkGf7AxDE7F3zMUcoxYzBQ%3D%3D",
+    "official_url": "https://www.linkedin.com/company/ibm"
+  },
+  {
+    "name": "QCP",
+    "description": "Hiring Junior Quantitative Developer.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/junior-quantitative-developer-at-qcp-4410525190?position=11&pageNum=0&refId=4P95JzZgcqWGfM98iH7wEw%3D%3D&trackingId=qFL8Wynuh4JIhmeh9GCFXA%3D%3D",
+    "official_url": "https://sg.linkedin.com/company/qcp-group"
+  },
+  {
+    "name": "Zscaler",
+    "description": "AI MI Intern Agenic Cloud.",
+    "location": "Remote",
+    "source_url": "https://web3.career/ai+intern+remote-jobs",
+    "official_url": null
+  },
+  {
+    "name": "Tether Operations Limited",
+    "description": "Machine Learning Engineer Intern 100% Remote.",
+    "location": "Remote",
+    "source_url": "https://web3.career/ai+intern+remote-jobs",
+    "official_url": null
+  },
+  {
+    "name": "Innovlab.ai",
+    "description": "AI Startup Interns \u2013 Full Stack, Growth & Partnerships. The company is passionate about leveraging artificial intelligence to deliver impactful solutions across industries. Hiring across multiple tracks: Full Stack / AI Systems. Skills sought include technical skills, business/growth skills.",
+    "location": "Singapore",
+    "source_url": "https://bebee.com/sg/jobs/ai-startup-interns-full-stack-growth-partnerships-innovlabai-innovlabai--theirstack-681873916",
+    "official_url": "https://innovlab.ai"
+  },
+  {
+    "name": "ABeam Consulting Southeast Asia (SEA)",
+    "description": "AI Intern (Agentic Automation). We are looking for interns who are interested in AI, automation, and software development to join our Agentic Automation team. You will gain hands-on exposure to AI and automation technologies, and support the development of intelligent business solutions.",
+    "location": "Singapore",
+    "source_url": "https://builtin.com/job/ai-intern-agentic-automation/9323259",
+    "official_url": null
+  },
+  {
+    "name": "Magellan Technology Research Institute (MTRI)",
+    "description": "AI Engineer Intern - Summer 2026. Will help build AI-powered solutions that help businesses accelerate their digital transformation through agentic frameworks, retrieval-augmented generation (RAG), machine learning, and other advanced technologies. Will work on real-world problems or explore open research topics.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/view/ai-engineer-intern-summer-2026-at-magellan-technology-research-institute-mtri-4396570265",
+    "official_url": null
+  },
+  {
+    "name": "Microsoft",
+    "description": "Research Science: Internship opportunities.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/microsoft"
+  },
+  {
+    "name": "Temasek",
+    "description": "AI & Analytics Intern, Financial Management (Jun/Jul - Dec 2026).",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/temasek-holdings"
+  },
+  {
+    "name": "MUFG",
+    "description": "AI Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://jp.linkedin.com/company/mufg"
+  },
+  {
+    "name": "AUMOVIO",
+    "description": "Artificial Intelligence Intern [IDA:00029].",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://de.linkedin.com/company/aumovio"
+  },
+  {
+    "name": "Seagate Technology",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
+  },
+  {
+    "name": "Tencent",
+    "description": "AI Engineer Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://cn.linkedin.com/company/tencentglobal"
+  },
+  {
+    "name": "EPOS",
+    "description": "AI Product Manager Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/epossystem"
+  },
+  {
+    "name": "Activate Interactive",
+    "description": "Intern - Data Science Intern - IN26003.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/activate-interactive-pte-ltd"
+  },
+  {
+    "name": "Zurich Insurance",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://ch.linkedin.com/company/zurich-insurance-company-ltd"
+  },
+  {
+    "name": "BeeX",
+    "description": "Robotics Software Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/beexsg"
+  },
+  {
+    "name": "PointStar Indonesia",
+    "description": "Developer Intern \u2013 Singapore.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://id.linkedin.com/company/pointstar-indonesia"
+  },
+  {
+    "name": "Tazapay",
+    "description": "BI & Analytics Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/tazapay"
+  },
+  {
+    "name": "Tencent",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://cn.linkedin.com/company/tencentglobal"
+  },
+  {
+    "name": "Seagate Technology",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
+  },
+  {
+    "name": "Razer Inc.",
+    "description": "AI Engineer Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/razer"
+  },
+  {
+    "name": "Seagate Technology",
+    "description": "Data Science & AI Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
+  },
+  {
+    "name": "Jain Global",
+    "description": "AI Research Intern, Singapore.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/jain-global-llc"
+  },
+  {
+    "name": "Seagate Technology",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/seagate-technology"
+  },
+  {
+    "name": "Rapsodo",
+    "description": "R&D Intern - Software Engineering.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/rapsodo"
+  },
+  {
+    "name": "Codex Solutions",
+    "description": "Software Engineer Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/codex-solutions-sg"
+  },
+  {
+    "name": "Acronis",
+    "description": "Machine Learning Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://ch.linkedin.com/company/acronis"
+  },
+  {
+    "name": "Tencent",
+    "description": "Data & AI Analytics Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://cn.linkedin.com/company/tencentglobal"
+  },
+  {
+    "name": "Tencent",
+    "description": "Data Science Intern.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://cn.linkedin.com/company/tencentglobal"
+  },
+  {
+    "name": "LionsBot International",
+    "description": "SOFTWARE INTERN, AI and Perception (INTERN).",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/lionsbot"
+  },
+  {
+    "name": "Infineon Technologies",
+    "description": "Internship - Data Scientist.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://de.linkedin.com/company/infineon-technologies"
+  },
+  {
+    "name": "Micron Technology",
+    "description": "Intern - Data Scientist.",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://www.linkedin.com/company/micron-technology"
+  },
+  {
+    "name": "VALSEA",
+    "description": "Speech / Applied ML Engineer (Intern).",
+    "location": "Singapore",
+    "source_url": "https://sg.linkedin.com/jobs/artificial-intelligence-intern-jobs",
+    "official_url": "https://sg.linkedin.com/company/valsea"
+  },
+  {
+    "name": "ABeam Consulting Southeast Asia (SEA)",
+    "description": "AI Intern (Agentic Automation). We are looking for interns who are interested in AI, automation, and software development to join our Agentic Automation team. You will gain hands-on exposure to AI and automation technologies, and support the development of intelligent business solutions.",
+    "location": "Singapore",
+    "source_url": "https://builtinsingapore.com/job/ai-intern-agentic-automation/9323259",
+    "official_url": null
   }
 ]
