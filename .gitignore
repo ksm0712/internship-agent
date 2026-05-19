@@ -1,6 +1,12 @@
 # secrets — NEVER commit these
 .env
 *.key
+credentials.json
+token.json
+
+# generated agent outputs
+data/
+out/
 
 # python junk
 __pycache__/
