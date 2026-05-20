@@ -1,7 +1,8 @@
 const notice = document.querySelector("#notice");
-const draftsEl = document.querySelector("#drafts");
+const currentDraftEl = document.querySelector("#current-draft");
 const draftCount = document.querySelector("#draft-count");
 const resumeLabel = document.querySelector("#resume-label");
+const historyList = document.querySelector("#history-list");
 
 function setNotice(message, isError = false) {
   if (!notice) return;
@@ -9,9 +10,21 @@ function setNotice(message, isError = false) {
   notice.classList.toggle("error", isError);
 }
 
+async function parseResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+  const text = await response.text();
+  return {
+    ok: false,
+    error: text.includes("<!doctype") ? "Server returned an error page. Check the Flask terminal." : text,
+  };
+}
+
 async function postForm(url, formData = new FormData()) {
   const response = await fetch(url, { method: "POST", body: formData });
-  const data = await response.json();
+  const data = await parseResponse(response);
   if (!response.ok || data.ok === false) {
     throw new Error(data.error || "Request failed.");
   }
@@ -27,6 +40,9 @@ function escapeHtml(value) {
 }
 
 function renderDraft(draft) {
+  if (!draft) {
+    return '<div class="empty">No pending draft. Create drafts to start reviewing.</div>';
+  }
   const disabled = !draft.to || draft.status === "sent" ? "disabled" : "";
   const statusText = String(draft.status || "").replaceAll("_", " ");
   return `
@@ -58,23 +74,43 @@ function renderDraft(draft) {
 
       <div class="draft-actions">
         <a class="source" href="${escapeHtml(draft.source_url)}" target="_blank" rel="noreferrer">Source</a>
-        <button class="ghost" data-action="skip" data-index="${draft.index}">Skip</button>
+        <button class="ghost" data-action="remove" data-index="${draft.index}">Remove</button>
         <button class="primary" data-action="send" data-index="${draft.index}" ${disabled}>Send</button>
       </div>
     </article>
   `;
 }
 
-function renderDrafts(drafts) {
-  if (!draftsEl) return;
-  draftsEl.innerHTML = drafts.length ? drafts.map(renderDraft).join("") : '<div class="empty">No drafts yet.</div>';
-  if (draftCount) draftCount.textContent = drafts.length;
+function renderHistory(items) {
+  if (!historyList) return;
+  if (!items || !items.length) {
+    historyList.innerHTML = '<div class="empty compact">No history yet.</div>';
+    return;
+  }
+  historyList.innerHTML = items
+    .map(
+      (item) => `
+        <div class="history-row">
+          <strong>${escapeHtml(item.company)}</strong>
+          <span>${escapeHtml(item.role)}</span>
+          <em>${escapeHtml(item.status)}</em>
+        </div>
+      `,
+    )
+    .join("");
 }
 
-async function refreshDrafts() {
+function renderQueue(data) {
+  if (currentDraftEl) currentDraftEl.innerHTML = renderDraft(data.current_draft);
+  if (draftCount) draftCount.textContent = data.pending_count || 0;
+  renderHistory(data.history || []);
+}
+
+async function refreshQueue() {
   const response = await fetch("/api/drafts");
-  const data = await response.json();
-  renderDrafts(data.drafts || []);
+  const data = await parseResponse(response);
+  if (data.ok === false) throw new Error(data.error || "Could not refresh drafts.");
+  renderQueue(data);
 }
 
 document.querySelector("#upload-form")?.addEventListener("submit", async (event) => {
@@ -83,7 +119,9 @@ document.querySelector("#upload-form")?.addEventListener("submit", async (event)
   try {
     const data = await postForm("/api/upload", new FormData(event.currentTarget));
     resumeLabel.textContent = data.resume_path;
-    setNotice("Resume uploaded.");
+    document.querySelector('[data-action="draft"]')?.removeAttribute("disabled");
+    window.hasResume = true;
+    setNotice("Resume uploaded. You can draft emails now.");
   } catch (error) {
     setNotice(error.message, true);
   }
@@ -113,31 +151,34 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "draft") {
+      if (!window.hasResume) {
+        setNotice("Upload your resume before drafting emails.", true);
+        return;
+      }
       const formData = new FormData();
       formData.set("limit", document.querySelector("#limit").value || "10");
-      formData.set("reset", "true");
       target.disabled = true;
-      setNotice("Drafting emails from your uploaded resume...");
+      setNotice("Drafting only companies not already in your history...");
       const data = await postForm("/api/draft", formData);
-      renderDrafts(data.drafts || []);
-      setNotice(`Created ${data.drafts_count} drafts.`);
+      renderQueue(data);
+      setNotice(`Created queue. ${data.pending_count || 0} pending drafts.`);
       target.disabled = false;
       return;
     }
 
     if (action === "refresh") {
-      await refreshDrafts();
-      setNotice("Draft queue refreshed.");
+      await refreshQueue();
+      setNotice("Queue refreshed.");
       return;
     }
 
-    if (action === "skip" || action === "send") {
+    if (action === "remove" || action === "send") {
       const index = target.dataset.index;
       target.disabled = true;
-      setNotice(action === "send" ? "Sending approved email..." : "Skipping draft...");
+      setNotice(action === "send" ? "Sending approved email..." : "Removing draft...");
       await postForm(`/api/drafts/${index}/${action}`);
-      await refreshDrafts();
-      setNotice(action === "send" ? "Email sent." : "Draft skipped.");
+      await refreshQueue();
+      setNotice(action === "send" ? "Email sent. Next draft loaded." : "Draft removed. Next draft loaded.");
     }
   } catch (error) {
     target.disabled = false;

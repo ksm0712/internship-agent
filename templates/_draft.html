@@ -26,7 +26,7 @@
 
   <div class="draft-actions">
     <a class="source" href="{{ draft.source_url }}" target="_blank" rel="noreferrer">Source</a>
-    <button class="ghost" data-action="skip" data-index="{{ draft.index }}">Skip</button>
+    <button class="ghost" data-action="remove" data-index="{{ draft.index }}">Remove</button>
     <button class="primary" data-action="send" data-index="{{ draft.index }}" {% if not draft.to or draft.status == "sent" %}disabled{% endif %}>
       Send
     </button>

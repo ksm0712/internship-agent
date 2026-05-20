@@ -478,7 +478,12 @@ def prompt_for_resume(path: Path | None) -> Path:
     return Path(value).expanduser().resolve()
 
 
-def draft_emails(resume_file: Path, input_file: Path, limit: int) -> list[dict[str, Any]]:
+def draft_emails(
+    resume_file: Path,
+    input_file: Path,
+    limit: int,
+    output_file: Path = DEFAULT_DRAFTS_FILE,
+) -> list[dict[str, Any]]:
     config = load_config()
     ensure_dirs()
     genai.configure(api_key=config.gemini_api_key)
@@ -486,7 +491,7 @@ def draft_emails(resume_file: Path, input_file: Path, limit: int) -> list[dict[s
     print(f"Reading resume from {resume_file}...")
     resume_text = read_resume(resume_file)
     contacts = json_load(input_file, [])[:limit]
-    drafts: list[dict[str, Any]] = json_load(DEFAULT_DRAFTS_FILE, [])
+    drafts: list[dict[str, Any]] = json_load(output_file, [])
     existing_keys = {(d.get("company"), d.get("role")) for d in drafts}
 
     print(f"Drafting {len(contacts)} emails...")
@@ -539,10 +544,10 @@ Opportunity/contact:
                 "body": draft["body"],
             }
         )
-        json_save(DEFAULT_DRAFTS_FILE, drafts)
+        json_save(output_file, drafts)
 
-    json_save(DEFAULT_DRAFTS_FILE, drafts)
-    print(f"Saved {len(drafts)} drafts to {DEFAULT_DRAFTS_FILE}")
+    json_save(output_file, drafts)
+    print(f"Saved {len(drafts)} drafts to {output_file}")
     return drafts
 
 

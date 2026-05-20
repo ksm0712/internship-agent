@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Internship Agent Error</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="login-page">
+      <section class="login-panel">
+        <div class="brand-mark">!</div>
+        <h1>Something needs attention</h1>
+        <p>{{ error }}</p>
+        <a class="primary login-button" href="{{ url_for('index') }}">Back to app</a>
+      </section>
+    </main>
+  </body>
+</html>
