@@ -1,9 +1,10 @@
 import argparse
 import base64
-import shutil
 import json
+import mimetypes
 import os
 import re
+import shutil
 import sys
 import time
 import warnings
@@ -404,9 +405,17 @@ def read_resume(path: Path) -> str:
     raise RuntimeError("Use a .txt, .md, or text-extractable .pdf resume.")
 
 
-def candidate_name_from_resume(resume_text: str) -> str:
+def candidate_name_from_resume(resume_text: str, resume_file: Path | None = None) -> str:
+    if resume_file:
+        stem = resume_file.stem.replace("_", " ")
+        stem = re.sub(r"\bresume\b", "", stem, flags=re.IGNORECASE).strip()
+        if stem:
+            return " ".join(part.capitalize() for part in stem.split())
     for line in resume_text.splitlines():
         cleaned = line.strip()
+        blocked = {"education", "professional experience", "skills, languages & interests"}
+        if cleaned.lower() in blocked:
+            continue
         if cleaned and len(cleaned.split()) <= 5 and "@" not in cleaned:
             return cleaned.title()
     return "Karan"
@@ -438,8 +447,8 @@ def resume_highlights(resume_text: str, max_items: int = 3) -> list[str]:
     return found[:max_items] or ["software engineering", "AI", "data-driven problem solving"]
 
 
-def fallback_draft(contact: dict[str, Any], resume_text: str) -> dict[str, str]:
-    name = candidate_name_from_resume(resume_text)
+def fallback_draft(contact: dict[str, Any], resume_text: str, resume_file: Path) -> dict[str, str]:
+    name = candidate_name_from_resume(resume_text, resume_file)
     highlights = ", ".join(resume_highlights(resume_text))
     company = contact.get("company", "your team")
     role = contact.get("role", "internship")
@@ -515,7 +524,7 @@ Opportunity/contact:
             draft = llm_json(model, prompt)
         except Exception as exc:
             print(f"    Gemini unavailable ({exc}); using local fallback draft.", flush=True)
-            draft = fallback_draft(contact, resume_text)
+            draft = fallback_draft(contact, resume_text, resume_file)
         drafts.append(
             {
                 "status": "pending_approval",
@@ -525,6 +534,7 @@ Opportunity/contact:
                 "role": contact.get("role"),
                 "source_url": contact.get("source_url"),
                 "contact_source": contact.get("contact_source", ""),
+                "resume_path": str(resume_file),
                 "subject": draft["subject"],
                 "body": draft["body"],
             }
@@ -566,11 +576,28 @@ def gmail_service(credentials_file: Path, token_file: Path):
     return build("gmail", "v1", credentials=creds)
 
 
-def send_message(service: Any, to_email: str, subject: str, body: str) -> dict[str, Any]:
+def send_message(
+    service: Any,
+    to_email: str,
+    subject: str,
+    body: str,
+    attachment_path: str | None = None,
+) -> dict[str, Any]:
     message = EmailMessage()
     message.set_content(body)
     message["To"] = to_email
     message["Subject"] = subject
+    if attachment_path:
+        path = Path(attachment_path).expanduser()
+        if path.exists():
+            mime_type, _ = mimetypes.guess_type(path)
+            maintype, subtype = (mime_type or "application/octet-stream").split("/", 1)
+            message.add_attachment(
+                path.read_bytes(),
+                maintype=maintype,
+                subtype=subtype,
+                filename=path.name,
+            )
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return service.users().messages().send(userId="me", body={"raw": encoded}).execute()
 
@@ -612,6 +639,8 @@ def review_and_send(drafts_file: Path, credentials_file: Path, token_file: Path)
         print(f"Draft {idx}/{len(drafts)}: {draft.get('company')} - {draft.get('role')}")
         print(f"To: {draft.get('to')}")
         print(f"Subject: {draft.get('subject')}")
+        if draft.get("resume_path"):
+            print(f"Attachment: {draft.get('resume_path')}")
         print("-" * 72)
         print(draft.get("body", ""))
         print("-" * 72)
@@ -629,7 +658,13 @@ def review_and_send(drafts_file: Path, credentials_file: Path, token_file: Path)
             continue
         if service is None:
             service = gmail_service(credentials_file, token_file)
-        sent = send_message(service, draft["to"], draft["subject"], draft["body"])
+        sent = send_message(
+            service,
+            draft["to"],
+            draft["subject"],
+            draft["body"],
+            draft.get("resume_path"),
+        )
         draft["status"] = "sent"
         draft["gmail_message_id"] = sent.get("id")
         changed = True

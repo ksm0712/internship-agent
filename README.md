@@ -18,6 +18,7 @@ An AI agent that finds startups hiring summer interns, drafts personalized cold 
 3. Finds a likely contact email with Hunter.io, or falls back to a generic `careers@domain`.
 4. Drafts a personalized email from your resume and the company's role details.
 5. Shows every email in the terminal and sends only after you approve it.
+6. Attaches your resume PDF when sending if the draft was created with a resume path.
 
 Generated files are saved under `data/` and `out/` so you can inspect or rerun each step.
 
