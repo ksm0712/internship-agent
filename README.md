@@ -2,6 +2,8 @@
 
 An AI agent that finds startups hiring summer interns, drafts personalized cold emails using my resume, and lets me approve before sending.
 
+Status: working end-to-end. It has successfully sent Gmail messages with the resume PDF attached after terminal approval.
+
 ## Stack
 - Python
 - Gemini API (LLM brain)
@@ -35,23 +37,28 @@ HUNTER_API_KEY=...
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+venv/bin/pip install -r requirements.txt
 ```
 
-For Gmail sending, create an OAuth Desktop Client in Google Cloud with Gmail API enabled, download the JSON, then run:
+For Gmail sending:
+
+1. Create an OAuth Desktop Client in Google Cloud.
+2. Enable the Gmail API for the same Google Cloud project.
+3. Download the OAuth client JSON.
+4. Save it locally with:
 
 ```bash
-python internship_agent.py setup-gmail
+venv/bin/python internship_agent.py setup-gmail
 ```
 
-It asks for the downloaded JSON path and saves it as `credentials.json`. The first send run opens a browser sign-in and creates `token.json`. Both files are ignored by git.
+It asks for the downloaded JSON path and saves it as `credentials.json`. The first approved send opens a browser sign-in and creates `token.json`. Both files are ignored by git.
 
 ## Run everything
 
 Use a text, markdown, or text-extractable PDF resume. If you omit `--resume`, the script prompts you for the path:
 
 ```bash
-python internship_agent.py run --resume /absolute/path/to/resume.pdf --limit 15
+venv/bin/python internship_agent.py run --resume /absolute/path/to/resume.pdf --limit 15
 ```
 
 The final step previews each email:
@@ -65,10 +72,10 @@ No email is sent unless you type `y` for that exact draft.
 ## Run step by step
 
 ```bash
-python internship_agent.py search --limit 25
-python internship_agent.py contacts
-python internship_agent.py draft --resume /absolute/path/to/resume.pdf --limit 25
-python internship_agent.py send
+venv/bin/python internship_agent.py search --limit 25
+venv/bin/python internship_agent.py contacts
+venv/bin/python internship_agent.py draft --resume /absolute/path/to/resume.pdf --limit 25
+venv/bin/python internship_agent.py send
 ```
 
 Useful output files:
@@ -76,3 +83,27 @@ Useful output files:
 - `data/internships.json`
 - `data/contacts.json`
 - `out/email_drafts.json`
+
+## Sending behavior
+
+The send step prints each draft with recipient, subject, body, and attachment path. Type:
+
+- `y` to send that email
+- `n` to skip it
+- `q` to quit without reviewing the rest
+
+After a successful Gmail API response, the draft status is updated to `sent` and a `gmail_message_id` is saved in `out/email_drafts.json`.
+
+Drafts without a valid `to` email are marked `missing_email` and skipped.
+
+## Troubleshooting
+
+If Gmail returns `403 Gmail API has not been used... or it is disabled`, enable Gmail API in the Google Cloud project that owns `credentials.json`, wait a few minutes, then rerun:
+
+```bash
+venv/bin/python internship_agent.py send
+```
+
+If OAuth blocks the login, add your Gmail account as a test user in the OAuth consent screen.
+
+If Gemini quota is hit while drafting, the agent saves progress after each draft and falls back to a local template so the workflow can still continue.
