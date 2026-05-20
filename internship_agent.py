@@ -138,6 +138,9 @@ def is_relevant_role(item: dict[str, Any]) -> bool:
     )
     location = str(item.get("location", "")).lower()
     source_url = str(item.get("source_url", "")).lower()
+    role = str(item.get("role", "")).strip().lower()
+    if role in {"careers", "jobs", "open roles", "internships"}:
+        return False
     singaporeish = (
         "singapore" in location
         or ".sg" in source_url
@@ -350,7 +353,8 @@ def find_contacts(input_file: Path, config: Config | None = None) -> list[dict[s
 
     for opp in opportunities:
         key = (opp["company"], opp["role"])
-        if key in existing_by_key:
+        existing_contact = existing_by_key.get(key)
+        if existing_contact and existing_contact.get("email"):
             continue
         print(f"Finding contact for {opp['company']} - {opp['role']}")
         domain = choose_domain(tavily, model, opp["company"], opp.get("official_url"))
@@ -380,7 +384,10 @@ def find_contacts(input_file: Path, config: Config | None = None) -> list[dict[s
             else:
                 contact["email"] = f"careers@{domain}"
                 contact["contact_source"] = "guessed generic careers address"
-        output.append(contact)
+        if existing_contact:
+            output = [contact if (item["company"], item["role"]) == key else item for item in output]
+        else:
+            output.append(contact)
         json_save(DEFAULT_CONTACTS_FILE, output)
         time.sleep(2)
 

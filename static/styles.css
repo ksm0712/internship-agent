@@ -510,6 +510,18 @@ pre {
   margin-top: 18px;
 }
 
+.needs-contact {
+  margin-top: 16px;
+}
+
+.needs-contact h3 {
+  margin-bottom: 4px;
+}
+
+.needs-contact .history-row {
+  background: #fff;
+}
+
 .history-row {
   display: grid;
   grid-template-columns: minmax(160px, 0.9fr) minmax(220px, 1.4fr) 120px;

@@ -135,6 +135,20 @@
               <div class="empty">No pending draft. Create drafts to start reviewing.</div>
             {% endif %}
           </div>
+
+          <div id="needs-contact" class="needs-contact">
+            {% if needs_contact %}
+              <h3>Needs contact</h3>
+              <p class="muted">These were found, but no recipient email was available. They are not in the send queue.</p>
+              {% for item in needs_contact %}
+                <div class="history-row">
+                  <strong>{{ item.company }}</strong>
+                  <span>{{ item.role }}</span>
+                  <em>needs contact</em>
+                </div>
+              {% endfor %}
+            {% endif %}
+          </div>
         </section>
 
         <section id="history" class="band">

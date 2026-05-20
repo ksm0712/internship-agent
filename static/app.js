@@ -3,6 +3,7 @@ const currentDraftEl = document.querySelector("#current-draft");
 const draftCount = document.querySelector("#draft-count");
 const resumeLabel = document.querySelector("#resume-label");
 const historyList = document.querySelector("#history-list");
+const needsContactEl = document.querySelector("#needs-contact");
 
 function updateKeyStatus(status) {
   window.keyStatus = status || window.keyStatus || {};
@@ -117,9 +118,33 @@ function renderHistory(items) {
     .join("");
 }
 
+function renderNeedsContact(items) {
+  if (!needsContactEl) return;
+  if (!items || !items.length) {
+    needsContactEl.innerHTML = "";
+    return;
+  }
+  needsContactEl.innerHTML = `
+    <h3>Needs contact</h3>
+    <p class="muted">These were found, but no recipient email was available. They are not in the send queue.</p>
+    ${items
+      .map(
+        (item) => `
+          <div class="history-row">
+            <strong>${escapeHtml(item.company)}</strong>
+            <span>${escapeHtml(item.role)}</span>
+            <em>needs contact</em>
+          </div>
+        `,
+      )
+      .join("")}
+  `;
+}
+
 function renderQueue(data) {
   if (currentDraftEl) currentDraftEl.innerHTML = renderDraft(data.current_draft);
   if (draftCount) draftCount.textContent = data.pending_count || 0;
+  renderNeedsContact(data.needs_contact || []);
   renderHistory(data.history || []);
 }
 

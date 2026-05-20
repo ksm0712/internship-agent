@@ -158,6 +158,10 @@ def company_key(company: str | None) -> str:
     return re.sub(r"\W+", "", (company or "").lower())
 
 
+def valid_email(value: str | None) -> bool:
+    return bool(value and "@" in value and "." in value.rsplit("@", 1)[-1])
+
+
 def history_company_keys() -> set[str]:
     return {company_key(item.get("company")) for item in history() if item.get("company")}
 
@@ -277,6 +281,8 @@ def public_drafts() -> list[dict[str, Any]]:
             continue
         if draft.get("status") == "removed":
             continue
+        if draft.get("status") == "pending_approval" and not valid_email(draft.get("to")):
+            draft = {**draft, "status": "needs_contact"}
         visible.append({**draft, "index": index})
     return visible
 
@@ -286,13 +292,15 @@ def queue_context() -> dict[str, Any]:
     pending = [
         draft
         for draft in drafts
-        if draft.get("status") in {"pending_approval", "missing_email"}
+        if draft.get("status") == "pending_approval" and valid_email(draft.get("to"))
     ]
+    needs_contact = [draft for draft in drafts if draft.get("status") == "needs_contact"]
     current = pending[0] if pending else None
     return {
         "drafts": drafts,
         "current_draft": current,
         "pending_count": len(pending),
+        "needs_contact": needs_contact,
         "history": history(),
     }
 
@@ -310,7 +318,7 @@ def index():
     user = signed_in_user()
     signed_in = user is not None
     user_data = user_state() if signed_in else {}
-    context = queue_context() if signed_in else {"drafts": [], "current_draft": None, "pending_count": 0, "history": []}
+    context = queue_context() if signed_in else {"drafts": [], "current_draft": None, "pending_count": 0, "needs_contact": [], "history": []}
     return render_template(
         "index.html",
         signed_in=signed_in,
@@ -322,6 +330,7 @@ def index():
         drafts=context["drafts"],
         current_draft=context["current_draft"],
         pending_count=context["pending_count"],
+        needs_contact=context["needs_contact"],
         history=context["history"],
     )
 
@@ -440,6 +449,7 @@ def api_draft():
     candidates = [
         contact
         for contact in contacts
+        if valid_email(contact.get("email"))
         if company_key(contact.get("company")) not in blocked_companies
         and company_key(contact.get("company")) not in existing_companies
     ][:limit]
@@ -447,7 +457,7 @@ def api_draft():
         return jsonify(
             {
                 "ok": False,
-                "error": "No new companies to draft. Your history already has these companies.",
+                "error": "No sendable contacts found. Add a Hunter key, rerun Find leads, or use job source links directly.",
                 **queue_context(),
             }
         ), 400
