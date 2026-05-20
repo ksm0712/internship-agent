@@ -1,5 +1,6 @@
 import argparse
 import base64
+import shutil
 import json
 import os
 import re
@@ -403,6 +404,15 @@ def read_resume(path: Path) -> str:
     raise RuntimeError("Use a .txt, .md, or text-extractable .pdf resume.")
 
 
+def prompt_for_resume(path: Path | None) -> Path:
+    if path:
+        return path.expanduser().resolve()
+    value = input("Resume path (.pdf, .txt, or .md): ").strip()
+    if not value:
+        raise RuntimeError("No resume path provided.")
+    return Path(value).expanduser().resolve()
+
+
 def draft_emails(resume_file: Path, input_file: Path, limit: int) -> list[dict[str, Any]]:
     config = load_config()
     ensure_dirs()
@@ -497,6 +507,28 @@ def send_message(service: Any, to_email: str, subject: str, body: str) -> dict[s
     return service.users().messages().send(userId="me", body={"raw": encoded}).execute()
 
 
+def setup_gmail(credentials_file: Path) -> None:
+    print("Gmail setup needs the OAuth Desktop Client JSON downloaded from Google Cloud.")
+    print(f"It will be saved to {credentials_file}")
+    source = input("Path to downloaded OAuth JSON file: ").strip()
+    if not source:
+        raise RuntimeError("No credentials file path provided.")
+
+    source_path = Path(source).expanduser().resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"File not found: {source_path}")
+
+    with source_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if "installed" not in data and "web" not in data:
+        raise RuntimeError("That file does not look like a Google OAuth client JSON.")
+
+    credentials_file.parent.mkdir(exist_ok=True)
+    shutil.copyfile(source_path, credentials_file)
+    print(f"Saved Gmail OAuth credentials to {credentials_file}")
+    print("This file is ignored by git.")
+
+
 def review_and_send(drafts_file: Path, credentials_file: Path, token_file: Path) -> None:
     drafts = json_load(drafts_file, [])
     if not drafts:
@@ -552,7 +584,7 @@ def main() -> None:
     contacts_p.add_argument("--input", type=Path, default=DEFAULT_SEARCH_FILE)
 
     drafts_p = sub.add_parser("draft", help="Draft personalized emails from resume and contacts.")
-    drafts_p.add_argument("--resume", type=Path, required=True)
+    drafts_p.add_argument("--resume", type=Path)
     drafts_p.add_argument("--input", type=Path, default=DEFAULT_CONTACTS_FILE)
     drafts_p.add_argument("--limit", type=int, default=25)
 
@@ -561,8 +593,11 @@ def main() -> None:
     send_p.add_argument("--credentials", type=Path, default=DEFAULT_CREDENTIALS_FILE)
     send_p.add_argument("--token", type=Path, default=DEFAULT_TOKEN_FILE)
 
+    setup_p = sub.add_parser("setup-gmail", help="Save the local Gmail OAuth credentials file.")
+    setup_p.add_argument("--credentials", type=Path, default=DEFAULT_CREDENTIALS_FILE)
+
     run_p = sub.add_parser("run", help="Run search, contact lookup, draft, then approval-to-send.")
-    run_p.add_argument("--resume", type=Path, required=True)
+    run_p.add_argument("--resume", type=Path)
     run_p.add_argument("--limit", type=int, default=15)
     run_p.add_argument("--credentials", type=Path, default=DEFAULT_CREDENTIALS_FILE)
     run_p.add_argument("--token", type=Path, default=DEFAULT_TOKEN_FILE)
@@ -574,13 +609,15 @@ def main() -> None:
         elif args.command == "contacts":
             find_contacts(args.input)
         elif args.command == "draft":
-            draft_emails(args.resume, args.input, args.limit)
+            draft_emails(prompt_for_resume(args.resume), args.input, args.limit)
         elif args.command == "send":
             review_and_send(args.drafts, args.credentials, args.token)
+        elif args.command == "setup-gmail":
+            setup_gmail(args.credentials)
         elif args.command == "run":
             search_internships(args.limit)
             find_contacts(DEFAULT_SEARCH_FILE)
-            draft_emails(args.resume, DEFAULT_CONTACTS_FILE, args.limit)
+            draft_emails(prompt_for_resume(args.resume), DEFAULT_CONTACTS_FILE, args.limit)
             review_and_send(DEFAULT_DRAFTS_FILE, args.credentials, args.token)
     except KeyboardInterrupt:
         print("\nStopped.")

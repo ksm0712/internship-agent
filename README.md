@@ -37,11 +37,17 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-For Gmail sending, create an OAuth Desktop Client in Google Cloud with Gmail API enabled and save the downloaded client secret as `credentials.json` in this folder. The first send run opens a browser sign-in and creates `token.json`.
+For Gmail sending, create an OAuth Desktop Client in Google Cloud with Gmail API enabled, download the JSON, then run:
+
+```bash
+python internship_agent.py setup-gmail
+```
+
+It asks for the downloaded JSON path and saves it as `credentials.json`. The first send run opens a browser sign-in and creates `token.json`. Both files are ignored by git.
 
 ## Run everything
 
-Use a text, markdown, or text-extractable PDF resume:
+Use a text, markdown, or text-extractable PDF resume. If you omit `--resume`, the script prompts you for the path:
 
 ```bash
 python internship_agent.py run --resume /absolute/path/to/resume.pdf --limit 15
