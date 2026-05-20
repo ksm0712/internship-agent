@@ -78,6 +78,40 @@ venv/bin/python internship_agent.py draft --resume /absolute/path/to/resume.pdf 
 venv/bin/python internship_agent.py send
 ```
 
+## Web app test
+
+The `web-app-test` branch includes a local Flask web app for the same workflow:
+
+```bash
+venv/bin/python web_app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5001
+```
+
+In the web app you can:
+
+- Sign in with Google for Gmail send permission.
+- Upload a resume PDF.
+- Find internship leads and contacts.
+- Generate email drafts.
+- Review each draft in the browser and click `Send` or `Skip`.
+
+The web app still uses `credentials.json`, so create it first with:
+
+```bash
+venv/bin/python internship_agent.py setup-gmail
+```
+
+For local Google OAuth, add this redirect URI to the OAuth client if Google rejects login:
+
+```text
+http://127.0.0.1:5001/oauth2callback
+```
+
 Useful output files:
 
 - `data/internships.json`
