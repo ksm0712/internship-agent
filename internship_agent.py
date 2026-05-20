@@ -418,11 +418,14 @@ def draft_emails(resume_file: Path, input_file: Path, limit: int) -> list[dict[s
     ensure_dirs()
     genai.configure(api_key=config.gemini_api_key)
     model = genai.GenerativeModel(MODEL_NAME)
+    print(f"Reading resume from {resume_file}...")
     resume_text = read_resume(resume_file)
     contacts = json_load(input_file, [])[:limit]
     drafts: list[dict[str, Any]] = []
 
-    for contact in contacts:
+    print(f"Drafting {len(contacts)} emails...")
+    for index, contact in enumerate(contacts, start=1):
+        print(f"  - {index}/{len(contacts)} {contact.get('company')} - {contact.get('role')}", flush=True)
         recipient_name = contact.get("contact_name") or "Hiring Team"
         prompt = f"""
 Draft a concise, warm cold email for this internship application.
