@@ -55,7 +55,9 @@ class Config:
     hunter_api_key: str | None
 
 
-def load_config() -> Config:
+def load_config(overrides: Config | None = None) -> Config:
+    if overrides:
+        return overrides
     load_dotenv()
     tavily_key = os.getenv("TAVILY_API_KEY")
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -152,8 +154,8 @@ def is_relevant_role(item: dict[str, Any]) -> bool:
     )
 
 
-def search_internships(limit: int) -> list[dict[str, Any]]:
-    config = load_config()
+def search_internships(limit: int, config: Config | None = None) -> list[dict[str, Any]]:
+    config = load_config(config)
     ensure_dirs()
     tavily = TavilyClient(api_key=config.tavily_api_key)
     genai.configure(api_key=config.gemini_api_key)
@@ -334,8 +336,8 @@ def score_contact(contact: dict[str, Any]) -> int:
     return score
 
 
-def find_contacts(input_file: Path) -> list[dict[str, Any]]:
-    config = load_config()
+def find_contacts(input_file: Path, config: Config | None = None) -> list[dict[str, Any]]:
+    config = load_config(config)
     ensure_dirs()
     tavily = TavilyClient(api_key=config.tavily_api_key)
     genai.configure(api_key=config.gemini_api_key)
@@ -483,8 +485,9 @@ def draft_emails(
     input_file: Path,
     limit: int,
     output_file: Path = DEFAULT_DRAFTS_FILE,
+    config: Config | None = None,
 ) -> list[dict[str, Any]]:
-    config = load_config()
+    config = load_config(config)
     ensure_dirs()
     genai.configure(api_key=config.gemini_api_key)
     model = genai.GenerativeModel(MODEL_NAME)

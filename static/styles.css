@@ -262,6 +262,50 @@ h3 {
   align-items: center;
 }
 
+.key-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.key-status span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #475467;
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.key-status span.ok {
+  color: var(--sent);
+  background: #ecfdf3;
+}
+
+.key-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 18px;
+}
+
+.key-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.key-form input {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
 .pipeline-controls {
   flex-wrap: wrap;
 }
@@ -530,5 +574,9 @@ pre {
 
   .history-row em {
     justify-self: start;
+  }
+
+  .key-form {
+    grid-template-columns: 1fr;
   }
 }

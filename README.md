@@ -95,10 +95,13 @@ http://127.0.0.1:5001
 In the web app you can:
 
 - Sign in with Google for Gmail send permission.
+- Add your own Gemini, Tavily, and optional Hunter API keys.
 - Upload a resume PDF.
 - Find internship leads and contacts.
 - Generate email drafts.
 - Review each draft in the browser and click `Send` or `Skip`.
+
+The web app is designed as a bring-your-own-keys app. Each signed-in user supplies their own free-tier API keys, so app usage does not run on the developer's Gemini/Tavily/Hunter quota.
 
 The web app still uses `credentials.json`, so create it first with:
 

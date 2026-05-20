@@ -13,6 +13,7 @@ from googleapiclient.discovery import build
 from werkzeug.utils import secure_filename
 
 from internship_agent import (
+    Config,
     DEFAULT_CONTACTS_FILE,
     DEFAULT_CREDENTIALS_FILE,
     DEFAULT_DRAFTS_FILE,
@@ -84,6 +85,36 @@ def save_user_state(user_data: dict[str, Any]) -> None:
     users = data.setdefault("users", {})
     users[user_key()] = user_data
     save_state(data)
+
+
+def user_api_keys() -> dict[str, str]:
+    return user_state().get("api_keys", {})
+
+
+def api_key_status() -> dict[str, bool]:
+    keys = user_api_keys()
+    return {
+        "gemini": bool(keys.get("gemini_api_key")),
+        "tavily": bool(keys.get("tavily_api_key")),
+        "hunter": bool(keys.get("hunter_api_key")),
+    }
+
+
+def user_config(require_search: bool = False, require_draft: bool = False) -> Config:
+    keys = user_api_keys()
+    gemini_key = keys.get("gemini_api_key")
+    tavily_key = keys.get("tavily_api_key")
+    if require_draft and not gemini_key:
+        raise RuntimeError("Add your Gemini API key before drafting emails.")
+    if require_search and not tavily_key:
+        raise RuntimeError("Add your Tavily API key before finding leads.")
+    if require_search and not gemini_key:
+        raise RuntimeError("Add your Gemini API key before extracting leads.")
+    return Config(
+        tavily_api_key=tavily_key or "",
+        gemini_api_key=gemini_key or "",
+        hunter_api_key=keys.get("hunter_api_key") or None,
+    )
 
 
 def history_file() -> Path:
@@ -158,6 +189,20 @@ def remember_company(draft: dict[str, Any], status: str) -> None:
             }
         )
     save_history(items)
+
+
+def friendly_error(exc: Exception) -> str:
+    text = str(exc)
+    if "429" in text and "quota" in text.lower():
+        return (
+            "Gemini quota is temporarily exhausted. Use the cached leads for now, "
+            "or try fresh search again later."
+        )
+    if "Gmail API has not been used" in text or "accessNotConfigured" in text:
+        return "Gmail API is not enabled for this OAuth project yet."
+    if "invalid_grant" in text or "access_denied" in text:
+        return "Google sign-in needs to be refreshed."
+    return text.split("[links", 1)[0].strip()
 
 
 def credentials_to_dict(creds: Credentials) -> dict[str, Any]:
@@ -256,7 +301,7 @@ def queue_context() -> dict[str, Any]:
 def handle_error(exc: Exception):
     app.logger.exception(exc)
     if request.path.startswith("/api/"):
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": friendly_error(exc)}), 500
     return render_template("error.html", error=exc), 500
 
 
@@ -271,6 +316,7 @@ def index():
         signed_in=signed_in,
         user=user,
         resume_path=user_data.get("resume_path"),
+        api_key_status=api_key_status(),
         internships_count=len(json_load(DEFAULT_SEARCH_FILE, [])),
         contacts_count=len(json_load(DEFAULT_CONTACTS_FILE, [])),
         drafts=context["drafts"],
@@ -330,17 +376,46 @@ def upload_resume():
     return jsonify({"ok": True, "resume_path": str(path)})
 
 
+@app.post("/api/settings")
+def save_settings():
+    require_signed_in()
+    user_data = user_state()
+    keys = user_data.setdefault("api_keys", {})
+    for form_name, key_name in [
+        ("gemini_api_key", "gemini_api_key"),
+        ("tavily_api_key", "tavily_api_key"),
+        ("hunter_api_key", "hunter_api_key"),
+    ]:
+        value = request.form.get(form_name, "").strip()
+        if value:
+            keys[key_name] = value
+    save_user_state(user_data)
+    return jsonify({"ok": True, "api_key_status": api_key_status()})
+
+
 @app.post("/api/search")
 def api_search():
     require_signed_in()
     limit = int(request.form.get("limit", 10))
-    internships = search_internships(limit)
-    contacts = find_contacts(DEFAULT_SEARCH_FILE)
+    try:
+        config = user_config(require_search=True)
+        internships = search_internships(limit, config)
+        contacts = find_contacts(DEFAULT_SEARCH_FILE, config)
+        warning = None
+    except Exception as exc:
+        cached_internships = json_load(DEFAULT_SEARCH_FILE, [])
+        cached_contacts = json_load(DEFAULT_CONTACTS_FILE, [])
+        if not cached_internships:
+            raise
+        internships = cached_internships[:limit]
+        contacts = cached_contacts
+        warning = friendly_error(exc)
     return jsonify(
         {
             "ok": True,
             "internships_count": len(internships),
             "contacts_count": len(contacts),
+            "warning": warning,
         }
     )
 
@@ -348,6 +423,7 @@ def api_search():
 @app.post("/api/draft")
 def api_draft():
     require_signed_in()
+    config = user_config(require_draft=True)
     user_data = user_state()
     resume_path = user_data.get("resume_path")
     if not resume_path:
@@ -380,7 +456,7 @@ def api_draft():
     drafts_file = user_drafts_file()
     before_count = len(json_load(drafts_file, []))
     json_save(temp_contacts, candidates)
-    draft_emails(Path(resume_path), temp_contacts, limit, drafts_file)
+    draft_emails(Path(resume_path), temp_contacts, limit, drafts_file, config)
 
     all_drafts = json_load(drafts_file, [])
     for draft in all_drafts[before_count:]:

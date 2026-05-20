@@ -23,6 +23,7 @@
           <div class="brand">Internship Agent</div>
           <div class="muted">Approval-first outreach</div>
           <nav class="nav">
+            <a href="#keys">API Keys</a>
             <a href="#resume">Resume</a>
             <a href="#drafts">Current Draft</a>
             <a href="#history">History</a>
@@ -51,6 +52,35 @@
           </div>
         </header>
 
+        <section id="keys" class="band">
+          <div class="section-head">
+            <div>
+              <h2>Your API Keys</h2>
+              <p class="muted">Each user brings their own free-tier keys, so this app does not pay for API usage.</p>
+            </div>
+            <div class="key-status">
+              <span class="{{ 'ok' if api_key_status.gemini else '' }}">Gemini</span>
+              <span class="{{ 'ok' if api_key_status.tavily else '' }}">Tavily</span>
+              <span class="{{ 'ok' if api_key_status.hunter else '' }}">Hunter optional</span>
+            </div>
+          </div>
+          <form class="key-form" id="settings-form">
+            <label>
+              Gemini API key
+              <input name="gemini_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.gemini else 'Required for drafting and lead extraction' }}">
+            </label>
+            <label>
+              Tavily API key
+              <input name="tavily_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.tavily else 'Required for finding leads' }}">
+            </label>
+            <label>
+              Hunter API key
+              <input name="hunter_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.hunter else 'Optional, improves contact lookup' }}">
+            </label>
+            <button class="secondary" type="submit">Save keys</button>
+          </form>
+        </section>
+
         <section id="resume" class="band setup-grid">
           <div>
             <h2>Resume</h2>
@@ -73,12 +103,14 @@
                 Limit
                 <input id="limit" type="number" value="10" min="1" max="30">
               </label>
-              <button class="secondary" data-action="search">Find leads</button>
-              <button class="primary" data-action="draft" {% if not resume_path %}disabled{% endif %}>Draft emails</button>
+              <button class="secondary" data-action="search" {% if not api_key_status.gemini or not api_key_status.tavily %}disabled{% endif %}>Find leads</button>
+              <button class="primary" data-action="draft" {% if not resume_path or not api_key_status.gemini %}disabled{% endif %}>Draft emails</button>
             </div>
           </div>
           <div class="notice" id="notice">
-            {% if resume_path %}
+            {% if not api_key_status.gemini or not api_key_status.tavily %}
+              Add your Gemini and Tavily keys to unlock lead search. Gemini plus an uploaded resume unlocks drafting.
+            {% elif resume_path %}
               Ready to draft from your uploaded resume.
             {% else %}
               Upload your resume to unlock drafting.
@@ -131,6 +163,7 @@
     <script>
       window.initialSignedIn = {{ "true" if signed_in else "false" }};
       window.hasResume = {{ "true" if resume_path else "false" }};
+      window.keyStatus = {{ api_key_status|tojson if signed_in else "{}" }};
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>

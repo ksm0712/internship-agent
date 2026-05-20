@@ -4,6 +4,23 @@ const draftCount = document.querySelector("#draft-count");
 const resumeLabel = document.querySelector("#resume-label");
 const historyList = document.querySelector("#history-list");
 
+function updateKeyStatus(status) {
+  window.keyStatus = status || window.keyStatus || {};
+  document.querySelector('[data-action="search"]')?.toggleAttribute(
+    "disabled",
+    !(window.keyStatus.gemini && window.keyStatus.tavily),
+  );
+  document.querySelector('[data-action="draft"]')?.toggleAttribute(
+    "disabled",
+    !(window.keyStatus.gemini && window.hasResume),
+  );
+  document.querySelectorAll(".key-status span").forEach((item) => {
+    const text = item.textContent.toLowerCase();
+    const key = text.includes("gemini") ? "gemini" : text.includes("tavily") ? "tavily" : "hunter";
+    item.classList.toggle("ok", Boolean(window.keyStatus[key]));
+  });
+}
+
 function setNotice(message, isError = false) {
   if (!notice) return;
   notice.textContent = message;
@@ -127,6 +144,19 @@ document.querySelector("#upload-form")?.addEventListener("submit", async (event)
   }
 });
 
+document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setNotice("Saving API keys...");
+  try {
+    const data = await postForm("/api/settings", new FormData(event.currentTarget));
+    updateKeyStatus(data.api_key_status);
+    event.currentTarget.reset();
+    setNotice("API keys saved. Free-tier usage now comes from this user's keys.");
+  } catch (error) {
+    setNotice(error.message, true);
+  }
+});
+
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("[data-action]");
   if (!target) return;
@@ -140,11 +170,20 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "search") {
+      if (!(window.keyStatus?.gemini && window.keyStatus?.tavily)) {
+        setNotice("Add Gemini and Tavily keys before finding leads.", true);
+        return;
+      }
       const formData = new FormData();
       formData.set("limit", document.querySelector("#limit").value || "10");
       target.disabled = true;
       setNotice("Finding internships and contacts. This can take a minute...");
       const data = await postForm("/api/search", formData);
+      if (data.warning) {
+        setNotice(`${data.warning} Showing ${data.internships_count} cached leads and ${data.contacts_count} contacts.`, true);
+        target.disabled = false;
+        return;
+      }
       setNotice(`Found ${data.internships_count} leads and ${data.contacts_count} contacts.`);
       window.location.reload();
       return;
@@ -153,6 +192,10 @@ document.addEventListener("click", async (event) => {
     if (action === "draft") {
       if (!window.hasResume) {
         setNotice("Upload your resume before drafting emails.", true);
+        return;
+      }
+      if (!window.keyStatus?.gemini) {
+        setNotice("Add your Gemini key before drafting emails.", true);
         return;
       }
       const formData = new FormData();
