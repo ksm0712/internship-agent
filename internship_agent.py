@@ -404,6 +404,62 @@ def read_resume(path: Path) -> str:
     raise RuntimeError("Use a .txt, .md, or text-extractable .pdf resume.")
 
 
+def candidate_name_from_resume(resume_text: str) -> str:
+    for line in resume_text.splitlines():
+        cleaned = line.strip()
+        if cleaned and len(cleaned.split()) <= 5 and "@" not in cleaned:
+            return cleaned.title()
+    return "Karan"
+
+
+def resume_highlights(resume_text: str, max_items: int = 3) -> list[str]:
+    terms = [
+        "python",
+        "machine learning",
+        "artificial intelligence",
+        "ai",
+        "data",
+        "software",
+        "react",
+        "typescript",
+        "javascript",
+        "sql",
+        "cloud",
+        "llm",
+        "rag",
+        "computer vision",
+        "nlp",
+    ]
+    lowered = resume_text.lower()
+    found = []
+    for term in terms:
+        if term in lowered:
+            found.append(term.upper() if term in {"ai", "sql", "llm", "rag", "nlp"} else term)
+    return found[:max_items] or ["software engineering", "AI", "data-driven problem solving"]
+
+
+def fallback_draft(contact: dict[str, Any], resume_text: str) -> dict[str, str]:
+    name = candidate_name_from_resume(resume_text)
+    highlights = ", ".join(resume_highlights(resume_text))
+    company = contact.get("company", "your team")
+    role = contact.get("role", "internship")
+    recipient = contact.get("contact_name") or "Hiring Team"
+    greeting = f"Hi {recipient.split()[0]}," if recipient != "Hiring Team" else "Hi Hiring Team,"
+    subject = f"Interest in {role} at {company}"
+    body = (
+        f"{greeting}\n\n"
+        f"I hope you are doing well. I came across the {role} opportunity at {company} "
+        f"and wanted to reach out because the work sounds closely aligned with my interests "
+        f"in {highlights}.\n\n"
+        f"I am applying for summer 2026 internships in Singapore and would be excited to "
+        f"contribute to {company}'s engineering and AI/data work. My resume is attached, "
+        f"and I would be grateful if you would consider me for this role or a similar "
+        f"internship opening on your team.\n\n"
+        f"Best,\n{name}"
+    )
+    return {"subject": subject, "body": body}
+
+
 def prompt_for_resume(path: Path | None) -> Path:
     if path:
         return path.expanduser().resolve()
@@ -421,10 +477,14 @@ def draft_emails(resume_file: Path, input_file: Path, limit: int) -> list[dict[s
     print(f"Reading resume from {resume_file}...")
     resume_text = read_resume(resume_file)
     contacts = json_load(input_file, [])[:limit]
-    drafts: list[dict[str, Any]] = []
+    drafts: list[dict[str, Any]] = json_load(DEFAULT_DRAFTS_FILE, [])
+    existing_keys = {(d.get("company"), d.get("role")) for d in drafts}
 
     print(f"Drafting {len(contacts)} emails...")
     for index, contact in enumerate(contacts, start=1):
+        if (contact.get("company"), contact.get("role")) in existing_keys:
+            print(f"  - {index}/{len(contacts)} {contact.get('company')} already drafted", flush=True)
+            continue
         print(f"  - {index}/{len(contacts)} {contact.get('company')} - {contact.get('role')}", flush=True)
         recipient_name = contact.get("contact_name") or "Hiring Team"
         prompt = f"""
@@ -451,7 +511,11 @@ Resume:
 Opportunity/contact:
 {json.dumps(contact, ensure_ascii=False)}
 """
-        draft = llm_json(model, prompt)
+        try:
+            draft = llm_json(model, prompt)
+        except Exception as exc:
+            print(f"    Gemini unavailable ({exc}); using local fallback draft.", flush=True)
+            draft = fallback_draft(contact, resume_text)
         drafts.append(
             {
                 "status": "pending_approval",
@@ -465,6 +529,7 @@ Opportunity/contact:
                 "body": draft["body"],
             }
         )
+        json_save(DEFAULT_DRAFTS_FILE, drafts)
 
     json_save(DEFAULT_DRAFTS_FILE, drafts)
     print(f"Saved {len(drafts)} drafts to {DEFAULT_DRAFTS_FILE}")
