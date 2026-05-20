@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Internship Agent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div>
+        <div class="brand">Internship Agent</div>
+        <div class="muted">Singapore AI/tech outreach</div>
+      </div>
+
+      <nav class="nav">
+        <a href="#setup">Setup</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#review">Review</a>
+      </nav>
+
+      <div class="account">
+        {% if signed_in %}
+          <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
+          <div>
+            <strong>{{ user.name or "Google connected" }}</strong>
+            <span>{{ user.email }}</span>
+          </div>
+        {% else %}
+          <a class="primary full" href="{{ url_for('auth_google') }}">Sign in with Google</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="page">
+      <header class="topbar">
+        <div>
+          <h1>Approve internship emails before they send</h1>
+          <p>Upload a resume, generate leads and drafts, then send each email from this browser queue.</p>
+        </div>
+        <div class="status-strip">
+          <div><strong>{{ internships_count }}</strong><span>Leads</span></div>
+          <div><strong>{{ contacts_count }}</strong><span>Contacts</span></div>
+          <div><strong id="draft-count">{{ drafts|length }}</strong><span>Drafts</span></div>
+        </div>
+      </header>
+
+      <section id="setup" class="band setup-grid">
+        <div>
+          <h2>Google</h2>
+          <p class="muted">
+            {% if signed_in %}
+              Gmail sending is connected. Sent mail uses this account.
+            {% else %}
+              Sign in once to grant Gmail send permission.
+            {% endif %}
+          </p>
+        </div>
+        <div class="action-row">
+          {% if signed_in %}
+            <button class="ghost" data-action="logout">Disconnect</button>
+          {% else %}
+            <a class="primary" href="{{ url_for('auth_google') }}">Sign in</a>
+          {% endif %}
+        </div>
+
+        <div>
+          <h2>Resume</h2>
+          <p class="muted" id="resume-label">{{ resume_path or "No resume uploaded yet." }}</p>
+        </div>
+        <form class="upload" id="upload-form">
+          <input type="file" name="resume" accept=".pdf,.txt,.md" required>
+          <button class="secondary" type="submit">Upload</button>
+        </form>
+      </section>
+
+      <section id="pipeline" class="band">
+        <div class="section-head">
+          <div>
+            <h2>Pipeline</h2>
+            <p class="muted">Run the heavier steps only when you want fresh results.</p>
+          </div>
+          <div class="pipeline-controls">
+            <label>
+              Limit
+              <input id="limit" type="number" value="10" min="1" max="30">
+            </label>
+            <button class="secondary" data-action="search">Find leads + contacts</button>
+            <button class="primary" data-action="draft">Create drafts</button>
+          </div>
+        </div>
+        <div class="notice" id="notice">Ready.</div>
+      </section>
+
+      <section id="review" class="review">
+        <div class="section-head">
+          <div>
+            <h2>Review Queue</h2>
+            <p class="muted">Every send still requires one explicit click.</p>
+          </div>
+          <button class="ghost" data-action="refresh">Refresh</button>
+        </div>
+
+        <div id="drafts" class="draft-list">
+          {% for draft in drafts %}
+            {% include "_draft.html" %}
+          {% else %}
+            <div class="empty">No drafts yet.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+
+    <script>
+      window.initialSignedIn = {{ "true" if signed_in else "false" }};
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
