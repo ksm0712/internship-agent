@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>History - Internship Agent</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
@@ -22,6 +23,7 @@
           <span>{{ user.email }}</span>
         </div>
         <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
+        <button class="logout-button" data-action="logout" type="button">Log out</button>
       </div>
     </header>
 
@@ -54,5 +56,6 @@
         </div>
       </section>
     </main>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>
 </html>

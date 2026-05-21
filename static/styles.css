@@ -202,6 +202,22 @@ h3 {
   font-weight: 850;
 }
 
+.logout-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.logout-button:hover {
+  color: var(--text);
+  border-color: #aeb8c8;
+}
+
 .page {
   max-width: 1240px;
   margin: 0 auto;
