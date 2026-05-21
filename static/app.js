@@ -160,7 +160,11 @@ document.querySelector("#upload-form")?.addEventListener("submit", async (event)
   setNotice("Uploading resume...");
   try {
     const data = await postForm("/api/upload", new FormData(event.currentTarget));
-    resumeLabel.textContent = data.resume_path;
+    const fileName = data.resume_path.split("/").pop().replaceAll("_", " ");
+    resumeLabel.textContent = fileName;
+    document.querySelector("#resume-card")?.classList.add("uploaded");
+    const resumeSubtext = document.querySelector("#resume-card span");
+    if (resumeSubtext) resumeSubtext.textContent = "Ready for drafting";
     document.querySelector('[data-action="draft"]')?.removeAttribute("disabled");
     window.hasResume = true;
     setNotice("Resume uploaded. You can draft emails now.");

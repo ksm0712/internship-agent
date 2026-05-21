@@ -20,13 +20,13 @@
     {% else %}
       <aside class="sidebar">
         <div>
-          <div class="brand">Internship Agent</div>
+          <a class="brand" href="{{ url_for('index') }}">Internship Agent</a>
           <div class="muted">Approval-first outreach</div>
           <nav class="nav">
             <a href="#keys">API Keys</a>
             <a href="#resume">Resume</a>
             <a href="#drafts">Current Draft</a>
-            <a href="#history">History</a>
+            <a href="{{ url_for('history_page') }}">History</a>
           </nav>
         </div>
 
@@ -40,8 +40,9 @@
       </aside>
 
       <main class="page">
-        <header class="topbar">
+        <header class="topbar hero">
           <div>
+            <span class="eyebrow">Singapore AI and tech internships</span>
             <h1>Approve one email at a time</h1>
             <p>Upload your resume, generate new company drafts, then send or remove each draft from this queue.</p>
           </div>
@@ -81,13 +82,23 @@
           </form>
         </section>
 
-        <section id="resume" class="band setup-grid">
+        <section id="resume" class="band resume-panel">
           <div>
             <h2>Resume</h2>
-            <p class="muted" id="resume-label">{{ resume_path or "Upload a PDF before drafting emails." }}</p>
+            <p class="muted">This file is attached automatically when you approve an email.</p>
+          </div>
+          <div class="resume-card {{ 'uploaded' if resume_path else '' }}" id="resume-card">
+            <div class="file-icon">PDF</div>
+            <div>
+              <strong id="resume-label">{{ resume_name or "No resume uploaded" }}</strong>
+              <span>{{ "Ready for drafting" if resume_path else "Upload a PDF, TXT, or MD file" }}</span>
+            </div>
           </div>
           <form class="upload" id="upload-form">
-            <input type="file" name="resume" accept=".pdf,.txt,.md" required>
+            <label class="file-picker">
+              <input type="file" name="resume" accept=".pdf,.txt,.md" required>
+              Choose file
+            </label>
             <button class="secondary" type="submit">Upload</button>
           </form>
         </section>
@@ -151,26 +162,6 @@
           </div>
         </section>
 
-        <section id="history" class="band">
-          <div class="section-head">
-            <div>
-              <h2>History</h2>
-              <p class="muted">Companies here will not be drafted again for this Google account.</p>
-            </div>
-            <button class="ghost" data-action="logout">Disconnect</button>
-          </div>
-          <div id="history-list" class="history-list">
-            {% for item in history %}
-              <div class="history-row">
-                <strong>{{ item.company }}</strong>
-                <span>{{ item.role }}</span>
-                <em>{{ item.status }}</em>
-              </div>
-            {% else %}
-              <div class="empty compact">No history yet.</div>
-            {% endfor %}
-          </div>
-        </section>
       </main>
     {% endif %}
 

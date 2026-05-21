@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>History - Internship Agent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div>
+        <a class="brand" href="{{ url_for('index') }}">Internship Agent</a>
+        <div class="muted">Approval-first outreach</div>
+        <nav class="nav">
+          <a href="{{ url_for('index') }}#keys">API Keys</a>
+          <a href="{{ url_for('index') }}#resume">Resume</a>
+          <a href="{{ url_for('index') }}#drafts">Current Draft</a>
+          <a class="active" href="{{ url_for('history_page') }}">History</a>
+        </nav>
+      </div>
+
+      <div class="account">
+        <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
+        <div>
+          <strong>{{ user.name or "Google connected" }}</strong>
+          <span>{{ user.email }}</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="page">
+      <header class="topbar hero">
+        <div>
+          <span class="eyebrow">Outreach memory</span>
+          <h1>Company history</h1>
+          <p>Companies here are excluded from future drafts for this Google account.</p>
+        </div>
+        <a class="ghost" href="{{ url_for('index') }}">Back to queue</a>
+      </header>
+
+      <section class="band history-page">
+        <div class="history-table">
+          <div class="history-head">
+            <span>Company</span>
+            <span>Role</span>
+            <span>Status</span>
+          </div>
+          <div id="history-list" class="history-list">
+            {% for item in history %}
+              <div class="history-row">
+                <strong>{{ item.company }}</strong>
+                <span>{{ item.role }}</span>
+                <em>{{ item.status }}</em>
+              </div>
+            {% else %}
+              <div class="empty compact">No history yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

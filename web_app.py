@@ -100,6 +100,12 @@ def api_key_status() -> dict[str, bool]:
     }
 
 
+def resume_display_name(resume_path: str | None) -> str | None:
+    if not resume_path:
+        return None
+    return Path(resume_path).name.replace("_", " ")
+
+
 def user_config(require_search: bool = False, require_draft: bool = False) -> Config:
     keys = user_api_keys()
     gemini_key = keys.get("gemini_api_key")
@@ -324,6 +330,7 @@ def index():
         signed_in=signed_in,
         user=user,
         resume_path=user_data.get("resume_path"),
+        resume_name=resume_display_name(user_data.get("resume_path")),
         api_key_status=api_key_status(),
         internships_count=len(json_load(DEFAULT_SEARCH_FILE, [])),
         contacts_count=len(json_load(DEFAULT_CONTACTS_FILE, [])),
@@ -332,6 +339,23 @@ def index():
         pending_count=context["pending_count"],
         needs_contact=context["needs_contact"],
         history=context["history"],
+    )
+
+
+@app.get("/history")
+def history_page():
+    user = signed_in_user()
+    if not user:
+        return redirect(url_for("index"))
+    user_data = user_state()
+    return render_template(
+        "history.html",
+        signed_in=True,
+        user=user,
+        resume_path=user_data.get("resume_path"),
+        resume_name=resume_display_name(user_data.get("resume_path")),
+        api_key_status=api_key_status(),
+        history=history(),
     )
 
 
