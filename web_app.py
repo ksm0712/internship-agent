@@ -289,7 +289,13 @@ def public_drafts() -> list[dict[str, Any]]:
             continue
         if draft.get("status") == "pending_approval" and not valid_email(draft.get("to")):
             draft = {**draft, "status": "needs_contact"}
-        visible.append({**draft, "index": index})
+        visible.append(
+            {
+                **draft,
+                "index": index,
+                "resume_name": resume_display_name(draft.get("resume_path")),
+            }
+        )
     return visible
 
 

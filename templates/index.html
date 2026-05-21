@@ -10,158 +10,154 @@
     {% if not signed_in %}
       <main class="login-page">
         <section class="login-panel">
-          <div class="brand-mark">IA</div>
-          <h1>Internship Agent</h1>
-          <p>Find Singapore AI/tech internships, draft outreach from your resume, and approve every send yourself.</p>
+          <div class="brand-lockup">
+            <div class="brand-mark">IA</div>
+            <span>Internship Agent</span>
+          </div>
+          <h1>Approve every outreach email before it leaves Gmail.</h1>
+          <p>Connect Google, bring your own API keys, upload a resume, and work through a clean send queue.</p>
           <a class="primary login-button" href="{{ url_for('auth_google') }}">Sign in with Google</a>
-          <span class="fine-print">Gmail permission is used only after you click Send on a draft.</span>
+          <span class="fine-print">Gmail permission is used only after you approve a draft.</span>
         </section>
       </main>
     {% else %}
-      <aside class="sidebar">
-        <div>
-          <a class="brand" href="{{ url_for('index') }}">Internship Agent</a>
-          <div class="muted">Approval-first outreach</div>
-          <nav class="nav">
-            <a href="#keys">API Keys</a>
-            <a href="#resume">Resume</a>
-            <a href="#drafts">Current Draft</a>
-            <a href="{{ url_for('history_page') }}">History</a>
-          </nav>
-        </div>
-
+      <header class="app-header">
+        <a class="brand-lockup" href="{{ url_for('index') }}">
+          <div class="brand-mark">IA</div>
+          <span>Internship Agent</span>
+        </a>
+        <nav class="top-nav">
+          <a class="active" href="{{ url_for('index') }}">Queue</a>
+          <a href="{{ url_for('history_page') }}">History</a>
+        </nav>
         <div class="account">
-          <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
           <div>
             <strong>{{ user.name or "Google connected" }}</strong>
             <span>{{ user.email }}</span>
           </div>
+          <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
         </div>
-      </aside>
+      </header>
 
       <main class="page">
-        <header class="topbar hero">
+        <section class="page-title">
           <div>
-            <span class="eyebrow">Singapore AI and tech internships</span>
-            <h1>Approve one email at a time</h1>
-            <p>Upload your resume, generate new company drafts, then send or remove each draft from this queue.</p>
+            <span class="eyebrow">Approval queue</span>
+            <h1>Review internship outreach</h1>
+            <p>Generate targeted drafts, then send or remove one company at a time.</p>
           </div>
           <div class="status-strip">
             <div><strong>{{ internships_count }}</strong><span>Leads</span></div>
             <div><strong>{{ contacts_count }}</strong><span>Contacts</span></div>
             <div><strong id="draft-count">{{ pending_count }}</strong><span>Pending</span></div>
           </div>
-        </header>
-
-        <section id="keys" class="band">
-          <div class="section-head">
-            <div>
-              <h2>Your API Keys</h2>
-              <p class="muted">Each user brings their own free-tier keys, so this app does not pay for API usage.</p>
-            </div>
-            <div class="key-status">
-              <span class="{{ 'ok' if api_key_status.gemini else '' }}">Gemini</span>
-              <span class="{{ 'ok' if api_key_status.tavily else '' }}">Tavily</span>
-              <span class="{{ 'ok' if api_key_status.hunter else '' }}">Hunter optional</span>
-            </div>
-          </div>
-          <form class="key-form" id="settings-form">
-            <label>
-              Gemini API key
-              <input name="gemini_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.gemini else 'Required for drafting and lead extraction' }}">
-            </label>
-            <label>
-              Tavily API key
-              <input name="tavily_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.tavily else 'Required for finding leads' }}">
-            </label>
-            <label>
-              Hunter API key
-              <input name="hunter_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.hunter else 'Optional, improves contact lookup' }}">
-            </label>
-            <button class="secondary" type="submit">Save keys</button>
-          </form>
         </section>
 
-        <section id="resume" class="band resume-panel">
-          <div>
-            <h2>Resume</h2>
-            <p class="muted">This file is attached automatically when you approve an email.</p>
-          </div>
-          <div class="resume-card {{ 'uploaded' if resume_path else '' }}" id="resume-card">
-            <div class="file-icon">PDF</div>
-            <div>
-              <strong id="resume-label">{{ resume_name or "No resume uploaded" }}</strong>
-              <span>{{ "Ready for drafting" if resume_path else "Upload a PDF, TXT, or MD file" }}</span>
-            </div>
-          </div>
-          <form class="upload" id="upload-form">
-            <label class="file-picker">
-              <input type="file" name="resume" accept=".pdf,.txt,.md" required>
-              Choose file
-            </label>
-            <button class="secondary" type="submit">Upload</button>
-          </form>
-        </section>
-
-        <section class="band">
-          <div class="section-head">
-            <div>
-              <h2>Drafting</h2>
-              <p class="muted">The app will skip companies already in your history.</p>
-            </div>
-            <div class="pipeline-controls">
-              <label>
-                Limit
-                <input id="limit" type="number" value="10" min="1" max="30">
-              </label>
-              <button class="secondary" data-action="search" {% if not api_key_status.gemini or not api_key_status.tavily %}disabled{% endif %}>Find leads</button>
-              <button class="primary" data-action="draft" {% if not resume_path or not api_key_status.gemini %}disabled{% endif %}>Draft emails</button>
-            </div>
-          </div>
-          <div class="notice" id="notice">
-            {% if not api_key_status.gemini or not api_key_status.tavily %}
-              Add your Gemini and Tavily keys to unlock lead search. Gemini plus an uploaded resume unlocks drafting.
-            {% elif resume_path %}
-              Ready to draft from your uploaded resume.
-            {% else %}
-              Upload your resume to unlock drafting.
-            {% endif %}
-          </div>
-        </section>
-
-        <section id="drafts" class="review">
-          <div class="section-head">
-            <div>
-              <h2>Current Draft</h2>
-              <p class="muted">Send or remove this one, then the next pending draft appears.</p>
-            </div>
-            <button class="ghost" data-action="refresh">Refresh</button>
-          </div>
-
-          <div id="current-draft">
-            {% if current_draft %}
-              {% set draft = current_draft %}
-              {% include "_draft.html" %}
-            {% else %}
-              <div class="empty">No pending draft. Create drafts to start reviewing.</div>
-            {% endif %}
-          </div>
-
-          <div id="needs-contact" class="needs-contact">
-            {% if needs_contact %}
-              <h3>Needs contact</h3>
-              <p class="muted">These were found, but no recipient email was available. They are not in the send queue.</p>
-              {% for item in needs_contact %}
-                <div class="history-row">
-                  <strong>{{ item.company }}</strong>
-                  <span>{{ item.role }}</span>
-                  <em>needs contact</em>
+        <section class="workspace">
+          <aside class="control-panel">
+            <section id="keys" class="panel-block">
+              <div class="block-head">
+                <h2>Keys</h2>
+                <div class="key-status">
+                  <span class="{{ 'ok' if api_key_status.gemini else '' }}">Gemini</span>
+                  <span class="{{ 'ok' if api_key_status.tavily else '' }}">Tavily</span>
+                  <span class="{{ 'ok' if api_key_status.hunter else '' }}">Hunter</span>
                 </div>
-              {% endfor %}
-            {% endif %}
-          </div>
-        </section>
+              </div>
+              <form class="key-form" id="settings-form">
+                <label>
+                  Gemini
+                  <input name="gemini_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.gemini else 'Required' }}">
+                </label>
+                <label>
+                  Tavily
+                  <input name="tavily_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.tavily else 'Required' }}">
+                </label>
+                <label>
+                  Hunter
+                  <input name="hunter_api_key" type="password" autocomplete="off" placeholder="{{ 'Saved' if api_key_status.hunter else 'Optional' }}">
+                </label>
+                <button class="secondary full" type="submit">Save keys</button>
+              </form>
+            </section>
 
+            <section id="resume" class="panel-block">
+              <div class="block-head">
+                <h2>Resume</h2>
+              </div>
+              <div class="resume-card {{ 'uploaded' if resume_path else '' }}" id="resume-card">
+                <div class="file-icon">PDF</div>
+                <div>
+                  <strong id="resume-label">{{ resume_name or "No resume uploaded" }}</strong>
+                  <span>{{ "Attached to approved emails" if resume_path else "Required before drafting" }}</span>
+                </div>
+              </div>
+              <form class="upload" id="upload-form">
+                <label class="file-picker">
+                  <input type="file" name="resume" accept=".pdf,.txt,.md" required>
+                  Choose file
+                </label>
+                <button class="ghost" type="submit">Upload</button>
+              </form>
+            </section>
+
+            <section class="panel-block">
+              <div class="block-head">
+                <h2>Drafting</h2>
+              </div>
+              <div class="draft-controls">
+                <label>
+                  Limit
+                  <input id="limit" type="number" value="10" min="1" max="30">
+                </label>
+                <button class="secondary" data-action="search" {% if not api_key_status.gemini or not api_key_status.tavily %}disabled{% endif %}>Find leads</button>
+                <button class="primary" data-action="draft" {% if not resume_path or not api_key_status.gemini %}disabled{% endif %}>Draft emails</button>
+              </div>
+              <div class="notice" id="notice">
+                {% if not api_key_status.gemini or not api_key_status.tavily %}
+                  Add Gemini and Tavily keys to search. Add Gemini plus a resume to draft.
+                {% elif resume_path %}
+                  Ready.
+                {% else %}
+                  Upload your resume to unlock drafting.
+                {% endif %}
+              </div>
+            </section>
+          </aside>
+
+          <section id="drafts" class="queue-panel">
+            <div class="queue-head">
+              <div>
+                <h2>Current draft</h2>
+                <p>Approve, remove, then continue to the next company.</p>
+              </div>
+              <button class="ghost" data-action="refresh">Refresh</button>
+            </div>
+
+            <div id="current-draft">
+              {% if current_draft %}
+                {% set draft = current_draft %}
+                {% include "_draft.html" %}
+              {% else %}
+                <div class="empty">No pending draft. Create drafts to start reviewing.</div>
+              {% endif %}
+            </div>
+
+            <div id="needs-contact" class="needs-contact">
+              {% if needs_contact %}
+                <h3>Needs contact</h3>
+                <p>These are excluded from the send queue until a recipient is found.</p>
+                {% for item in needs_contact %}
+                  <div class="compact-row">
+                    <strong>{{ item.company }}</strong>
+                    <span>{{ item.role }}</span>
+                    <em>needs contact</em>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            </div>
+          </section>
+        </section>
       </main>
     {% endif %}
 

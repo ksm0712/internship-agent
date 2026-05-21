@@ -84,7 +84,7 @@ function renderDraft(draft) {
         </div>
         <div>
           <dt>Attachment</dt>
-          <dd>${escapeHtml(draft.resume_path || "None")}</dd>
+          <dd>${escapeHtml(draft.resume_name || "Resume")}</dd>
         </div>
       </dl>
 
@@ -126,11 +126,11 @@ function renderNeedsContact(items) {
   }
   needsContactEl.innerHTML = `
     <h3>Needs contact</h3>
-    <p class="muted">These were found, but no recipient email was available. They are not in the send queue.</p>
+    <p>These are excluded from the send queue until a recipient is found.</p>
     ${items
       .map(
         (item) => `
-          <div class="history-row">
+          <div class="compact-row">
             <strong>${escapeHtml(item.company)}</strong>
             <span>${escapeHtml(item.role)}</span>
             <em>needs contact</em>
