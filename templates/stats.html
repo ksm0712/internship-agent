@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stats - Internship Agent</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand-lockup" href="{{ url_for('index') }}">
+        <div class="brand-mark">IA</div>
+        <span>Internship Agent</span>
+      </a>
+      <nav class="top-nav">
+        <a href="{{ url_for('index') }}">Queue</a>
+        <a href="{{ url_for('history_page') }}">History</a>
+        <a class="active" href="{{ url_for('stats_page') }}">Stats</a>
+      </nav>
+      <div class="account">
+        <div>
+          <strong>{{ user.name or "Google connected" }}</strong>
+          <span>{{ user.email }}</span>
+        </div>
+        <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
+        <button class="logout-button" data-action="logout" type="button">Log out</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="page-title">
+        <div>
+          <span class="eyebrow">Pipeline instrumentation</span>
+          <h1>Run metrics</h1>
+          <p>Per-stage latency, API call volume, cache hit rate, and error rate across every search / contact / draft run recorded in this database.</p>
+        </div>
+        <div class="status-strip">
+          <div><strong>{{ stats.total_runs }}</strong><span>Runs</span></div>
+          <div><strong>{{ stats.total_stage_executions }}</strong><span>Stage executions</span></div>
+        </div>
+      </section>
+
+      {% if not stats.stages %}
+        <div class="empty">No runs recorded yet. Find leads or draft emails to populate this page.</div>
+      {% else %}
+        <section class="history-panel">
+          <div class="stats-head">
+            <span>Stage</span>
+            <span>Runs</span>
+            <span>p50 latency</span>
+            <span>p95 latency</span>
+            <span>API calls</span>
+            <span>Cache hit rate</span>
+            <span>Errors</span>
+          </div>
+          <div class="stats-list">
+            {% for name, s in stats.stages.items() %}
+              <div class="stats-row">
+                <strong>{{ name }}</strong>
+                <span>{{ s.runs }}</span>
+                <span>{{ s.latency_ms_p50 }} ms</span>
+                <span>{{ s.latency_ms_p95 }} ms</span>
+                <span>{{ s.api_calls }}</span>
+                <span>{{ (s.cache_hit_rate * 100) | round(1) }}%</span>
+                <span class="{{ 'stats-error' if s.errors else '' }}">{{ s.errors }} ({{ (s.error_rate * 100) | round(1) }}%)</span>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

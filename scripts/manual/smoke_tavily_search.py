@@ -1,3 +1,5 @@
+# Manual smoke check: confirms TAVILY_API_KEY in .env actually works. Hits the
+# real API and costs a call — not part of `pytest` (see tests/ for that).
 import os
 from dotenv import load_dotenv
 from tavily import TavilyClient

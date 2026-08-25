@@ -1,3 +1,5 @@
+# Manual smoke check: confirms GEMINI_API_KEY in .env actually works. Hits the
+# real API and costs a call — not part of `pytest` (see tests/ for that).
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
