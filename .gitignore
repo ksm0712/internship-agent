@@ -27,3 +27,4 @@ htmlcov/
 # editor junk
 .vscode/
 .idea/
+.claude/

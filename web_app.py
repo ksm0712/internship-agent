@@ -9,6 +9,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
 from internship_agent import (
@@ -198,6 +199,16 @@ def queue_context() -> dict[str, Any]:
         "needs_contact": needs_contact,
         "history": repo.history(email) if email else [],
     }
+
+
+@app.errorhandler(HTTPException)
+def handle_http_error(exc: HTTPException):
+    # Routing errors (404, 405, ...) aren't application failures — a browser
+    # probing /favicon.ico shouldn't be logged as an ERROR or come back as a
+    # 500. Let Werkzeug's own status code and page through.
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": exc.description}), exc.code
+    return exc
 
 
 @app.errorhandler(Exception)

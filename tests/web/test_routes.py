@@ -5,6 +5,20 @@ import io
 import web_app
 
 
+class TestErrorHandling:
+    def test_unknown_route_returns_404_not_500(self, client):
+        # Regression check: the catch-all error handler used to swallow
+        # Werkzeug's HTTPException (404/405/...) and turn every routing miss
+        # — including a browser's routine /favicon.ico probe — into a 500.
+        response = client.get("/no-such-route")
+        assert response.status_code == 404
+
+    def test_unknown_api_route_returns_404_json(self, client):
+        response = client.get("/api/no-such-route")
+        assert response.status_code == 404
+        assert response.get_json()["ok"] is False
+
+
 class TestIndexPage:
     def test_signed_out_shows_login(self, client):
         response = client.get("/")

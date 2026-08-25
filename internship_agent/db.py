@@ -159,8 +159,13 @@ class Database:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         if str(self.path) != ":memory:":
-            conn.execute("PRAGMA journal_mode = WAL")
+            # busy_timeout has to be set *before* the journal_mode switch, not
+            # after: two processes racing to open the same fresh database file
+            # (e.g. Flask's debug reloader briefly running old + new workers)
+            # can hit "database is locked" on the WAL-mode switch itself if
+            # nothing is set yet to make sqlite retry instead of failing fast.
             conn.execute("PRAGMA busy_timeout = 5000")
+            conn.execute("PRAGMA journal_mode = WAL")
         with self._connections_lock:
             self._all_connections.append(conn)
         return conn
