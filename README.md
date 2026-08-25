@@ -1,8 +1,10 @@
 # Internship Agent
 
-A local web app for finding AI, tech, and CS internships in Singapore, drafting outreach emails from a resume, and sending each email only after explicit user approval.
+A search → contact-resolution → drafting pipeline for internship outreach, with a human-in-the-loop Gmail send step. Runs as a local web app or a CLI.
 
-The app uses each user's own Google account for Gmail sending and their own API keys for search and drafting. Nothing sends automatically.
+Each user brings their own Google account (for Gmail sending) and their own Gemini/Tavily/Hunter.io API keys — nothing sends automatically, and no email leaves without an explicit approval click.
+
+[Architecture](ARCHITECTURE.md) has the schema, the pipeline diagram, and the design decisions behind each piece below.
 
 ## Screenshots
 
@@ -20,8 +22,6 @@ The app uses each user's own Google account for Gmail sending and their own API 
 
 ## What It Does
 
-The web app runs an approval-first outreach workflow:
-
 1. Sign in with Google so the app can send from your Gmail account.
 2. Add your own Gemini and Tavily keys, plus an optional Hunter.io key.
 3. Upload a resume PDF.
@@ -33,27 +33,52 @@ The web app runs an approval-first outreach workflow:
 
 Drafts without a recipient are separated into `Needs contact` and are not sendable until a real email is found.
 
+## Engineering
+
+This started as a single 749-line script writing flat JSON files. The current version:
+
+- **Storage**: a normalized SQLite schema (5 tables, indexed on the lookup columns, WAL mode for concurrent readers/writers) instead of rewriting whole JSON files on every mutation. BYO API keys and the Gmail OAuth token are encrypted at rest (Fernet), not plaintext — the old version stored them as plaintext JSON, and additionally kept the Gmail token in one file shared by *every* signed-in user, so a second Google account signing in could silently take over the first account's send credentials. Both are fixed; see [ARCHITECTURE.md](ARCHITECTURE.md#security).
+- **Concurrency**: contact resolution and drafting run on bounded thread pools instead of a sequential loop with `time.sleep()` between every company. Benchmarked with reproducible simulated API latency (`benchmarks/bench_concurrency.py`, no network or API keys needed to run it):
+
+  ```text
+  companies: 20, simulated latency: 0.30s/call
+  sequential (1 worker):    18.26s
+  concurrent (5 workers):    3.66s
+  speedup:                   4.99x
+  ```
+
+- **Resilience**: every external call (Tavily, Gemini, Hunter.io, Gmail) is wrapped in retry-with-exponential-backoff, and a circuit breaker fails fast once a dependency is down instead of continuing to retry it. Domain-lookup results are cached (TTL) and single-flighted, so concurrent workers can't stampede the same cache key — a real race a concurrency test caught during development (two threads resolving the same company's domain could both miss the cache before either wrote back).
+- **Observability**: every pipeline run records per-stage latency (p50/p95), API call counts, cache hit rate, and error rate to SQLite, surfaced at `/api/stats` and the in-app **Stats** page.
+- **Testing**: 180 pytest tests (unit, integration with mocked external APIs, and Flask route tests) at 87% coverage, clean under `ruff` and `mypy`. CI runs the full suite plus a Docker build on Python 3.11–3.13.
+
 ## Stack
 
-- Python
-- Flask
-- Gemini API for drafting
+- Python, Flask
+- SQLite (storage) — see [ARCHITECTURE.md](ARCHITECTURE.md)
+- Gemini API for extraction and drafting
 - Tavily for web search
 - Hunter.io for contact lookup
 - Gmail API for approved sends
 
 ## Local Setup
 
-Install dependencies:
+Install dependencies (or `requirements-dev.txt` to also get pytest/ruff/mypy):
 
 ```bash
-venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+Set an encryption key for stored API keys/tokens (falls back to an insecure dev default with a warning if unset — fine for `localhost`, not for anything shared):
+
+```bash
+export INTERNSHIP_AGENT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 ```
 
 Create or update Gmail OAuth credentials:
 
 ```bash
-venv/bin/python internship_agent.py setup-gmail
+python -m internship_agent setup-gmail
 ```
 
 That command asks for your downloaded Google OAuth client JSON and saves it as `credentials.json`. This file is ignored by git.
@@ -61,7 +86,7 @@ That command asks for your downloaded Google OAuth client JSON and saves it as `
 Start the web app:
 
 ```bash
-venv/bin/python web_app.py
+python web_app.py
 ```
 
 Open:
@@ -75,6 +100,14 @@ For local Google OAuth, your OAuth client needs this redirect URI:
 ```text
 http://127.0.0.1:5001/oauth2callback
 ```
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Serves the same app on `http://localhost:5001`, backed by a SQLite file under `./data` on the host. Set `FLASK_SECRET_KEY` / `INTERNSHIP_AGENT_SECRET_KEY` in your shell first if you want anything other than the dev defaults.
 
 ## Google OAuth: Cornell-Only / Organization Restricted Fix
 
@@ -96,7 +129,7 @@ The app uses the `gmail.send` scope because it only needs to send approved email
 If the Cornell-owned project does not let you switch to `External`, create a new personal Google Cloud project, enable Gmail API, configure the consent screen as `External`, create a new OAuth client, download its JSON, and rerun:
 
 ```bash
-venv/bin/python internship_agent.py setup-gmail
+python -m internship_agent setup-gmail
 ```
 
 ## Bring Your Own Keys
@@ -107,25 +140,24 @@ The web app is designed to avoid the developer paying for everyone else's usage.
 - Tavily: required for search
 - Hunter.io: optional, improves recipient discovery
 
-Keys are saved locally under ignored data files for this development app. For a real hosted multi-user deployment, replace local file storage with a database and encrypted secret storage.
+Keys and the Gmail OAuth token are encrypted at rest in SQLite (see [ARCHITECTURE.md](ARCHITECTURE.md#security)), scoped per signed-in Google account.
 
 ## CLI Workflow
 
-The original command-line agent still works.
-
-Run everything:
+The original command-line agent still works, now as `python -m internship_agent`:
 
 ```bash
-venv/bin/python internship_agent.py run --resume /absolute/path/to/resume.pdf --limit 15
+python -m internship_agent run --resume /absolute/path/to/resume.pdf --limit 15
 ```
 
 Run step by step:
 
 ```bash
-venv/bin/python internship_agent.py search --limit 25
-venv/bin/python internship_agent.py contacts
-venv/bin/python internship_agent.py draft --resume /absolute/path/to/resume.pdf --limit 25
-venv/bin/python internship_agent.py send
+python -m internship_agent search --limit 25
+python -m internship_agent contacts
+python -m internship_agent draft --resume /absolute/path/to/resume.pdf --limit 25
+python -m internship_agent send
+python -m internship_agent stats   # print aggregate pipeline metrics
 ```
 
 The CLI send step previews each email:
@@ -136,24 +168,26 @@ Send this email? [y]es / [n]o skip / [q]uit:
 
 No email is sent unless you type `y` for that exact draft.
 
+## Testing
+
+```bash
+pytest tests -q --cov=internship_agent --cov=web_app --cov-report=term-missing
+ruff check internship_agent web_app.py tests
+mypy internship_agent web_app.py
+```
+
+`tests/unit` covers pure logic and storage in isolation; `tests/integration` runs the real pipeline stages (including their thread pools) against mocked Tavily/Gemini/Hunter clients; `tests/web` drives the Flask routes with `app.test_client()`. Nothing in the suite makes a real network call or needs API keys. `scripts/manual/` holds ad hoc scripts that *do* hit the real APIs, for sanity-checking your own keys — they're not part of `pytest`.
+
 ## Generated Files
 
 Local generated files are ignored by git:
 
 - `credentials.json`
 - `token.json`
-- `data/`
+- `data/` (includes `data/internship_agent.db`, the SQLite database)
 - `out/`
 - `uploads/`
 - `.env`
-
-Useful runtime files include:
-
-- `data/internships.json`
-- `data/contacts.json`
-- `data/drafts_<user>.json`
-- `data/history/<user>.json`
-- `out/email_drafts.json`
 
 ## Troubleshooting
 

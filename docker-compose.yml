@@ -1,0 +1,14 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+      - ./out:/app/out
+      - ./uploads:/app/uploads
+      # Uncomment once you have a Gmail OAuth client (see README: Local Setup):
+      # - ./credentials.json:/app/credentials.json:ro
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-local-dev-change-me}
+      INTERNSHIP_AGENT_SECRET_KEY: ${INTERNSHIP_AGENT_SECRET_KEY:-local-dev-insecure-secret-key-change-me}
