@@ -1,3 +1,5 @@
+# Manual smoke check: confirms Tavily's extract() endpoint works with your
+# key. Hits the real API and costs a call — not part of `pytest` (see tests/).
 import os
 from dotenv import load_dotenv
 from tavily import TavilyClient

@@ -64,7 +64,7 @@ function renderDraft(draft) {
   const disabled = !draft.to || draft.status === "sent" ? "disabled" : "";
   const statusText = String(draft.status || "").replaceAll("_", " ");
   return `
-    <article class="draft" data-index="${draft.index}" data-status="${escapeHtml(draft.status)}">
+    <article class="draft" data-id="${draft.id}" data-status="${escapeHtml(draft.status)}">
       <div class="draft-meta">
         <div>
           <h3>${escapeHtml(draft.company)}</h3>
@@ -92,8 +92,8 @@ function renderDraft(draft) {
 
       <div class="draft-actions">
         <a class="source" href="${escapeHtml(draft.source_url)}" target="_blank" rel="noreferrer">Source</a>
-        <button class="ghost" data-action="remove" data-index="${draft.index}">Remove</button>
-        <button class="primary" data-action="send" data-index="${draft.index}" ${disabled}>Send</button>
+        <button class="ghost" data-action="remove" data-id="${draft.id}">Remove</button>
+        <button class="primary" data-action="send" data-id="${draft.id}" ${disabled}>Send</button>
       </div>
     </article>
   `;
@@ -245,10 +245,10 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "remove" || action === "send") {
-      const index = target.dataset.index;
+      const draftId = target.dataset.id;
       target.disabled = true;
       setNotice(action === "send" ? "Sending approved email..." : "Removing draft...");
-      await postForm(`/api/drafts/${index}/${action}`);
+      await postForm(`/api/drafts/${draftId}/${action}`);
       await refreshQueue();
       setNotice(action === "send" ? "Email sent. Next draft loaded." : "Draft removed. Next draft loaded.");
     }

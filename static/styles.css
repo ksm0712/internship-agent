@@ -695,6 +695,51 @@ pre {
   border-top: 1px solid var(--line);
 }
 
+.stats-head,
+.stats-row {
+  display: grid;
+  grid-template-columns: 1fr 0.6fr 0.9fr 0.9fr 0.8fr 1fr 1.1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.stats-head {
+  padding: 13px 18px;
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stats-list {
+  display: grid;
+}
+
+.stats-row {
+  padding: 15px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.stats-row strong {
+  text-transform: capitalize;
+}
+
+.stats-error {
+  color: #b42318;
+  font-weight: 700;
+}
+
+@media (max-width: 920px) {
+  .stats-head,
+  .stats-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 @media (max-width: 920px) {
   .app-header {
     position: static;

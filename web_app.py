@@ -1,4 +1,3 @@
-import json
 import os
 import re
 from pathlib import Path
@@ -13,27 +12,23 @@ from googleapiclient.discovery import build
 from werkzeug.utils import secure_filename
 
 from internship_agent import (
-    Config,
-    DEFAULT_CONTACTS_FILE,
+    DB_PATH,
     DEFAULT_CREDENTIALS_FILE,
-    DEFAULT_DRAFTS_FILE,
-    DEFAULT_SEARCH_FILE,
-    ROOT,
-    draft_emails,
-    find_contacts,
-    json_load,
-    json_save,
-    search_internships,
-    send_message,
+    UPLOAD_DIR,
+    Config,
+    ensure_dirs,
 )
-
+from internship_agent.clients.gmail_client import send_message
+from internship_agent.db import Database
+from internship_agent.metrics import aggregate_stats, new_run_id
+from internship_agent.pipeline.contacts import find_contacts
+from internship_agent.pipeline.drafting import draft_emails
+from internship_agent.pipeline.search import search_internships
+from internship_agent.repository import Repository
+from internship_agent.text_utils import company_key, valid_email
 
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
-UPLOAD_DIR = ROOT / "uploads"
-WEB_TOKEN_FILE = ROOT / "data" / "web_google_token.json"
-WEB_STATE_FILE = ROOT / "data" / "web_state.json"
-HISTORY_DIR = ROOT / "data" / "history"
 SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "local-dev-change-me")
 SCOPES = [
     "openid",
@@ -45,24 +40,8 @@ SCOPES = [
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-
-def ensure_web_dirs() -> None:
-    UPLOAD_DIR.mkdir(exist_ok=True)
-    WEB_TOKEN_FILE.parent.mkdir(exist_ok=True)
-    HISTORY_DIR.mkdir(exist_ok=True)
-
-
-def state() -> dict[str, Any]:
-    return json_load(WEB_STATE_FILE, {})
-
-
-def save_state(data: dict[str, Any]) -> None:
-    json_save(WEB_STATE_FILE, data)
-
-
-def current_user_email() -> str | None:
-    user = session.get("user") or {}
-    return user.get("email")
+db = Database(DB_PATH)
+repo = Repository(db)
 
 
 def user_key() -> str:
@@ -70,34 +49,9 @@ def user_key() -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "_", email).strip("_") or "local"
 
 
-def user_state() -> dict[str, Any]:
-    data = state()
-    users = data.setdefault("users", {})
-    current = users.setdefault(user_key(), {})
-    if not current.get("resume_path") and data.get("resume_path"):
-        current["resume_path"] = data["resume_path"]
-        save_state(data)
-    return current
-
-
-def save_user_state(user_data: dict[str, Any]) -> None:
-    data = state()
-    users = data.setdefault("users", {})
-    users[user_key()] = user_data
-    save_state(data)
-
-
-def user_api_keys() -> dict[str, str]:
-    return user_state().get("api_keys", {})
-
-
-def api_key_status() -> dict[str, bool]:
-    keys = user_api_keys()
-    return {
-        "gemini": bool(keys.get("gemini_api_key")),
-        "tavily": bool(keys.get("tavily_api_key")),
-        "hunter": bool(keys.get("hunter_api_key")),
-    }
+def current_user_email() -> str | None:
+    user = session.get("user") or {}
+    return user.get("email")
 
 
 def resume_display_name(resume_path: str | None) -> str | None:
@@ -106,10 +60,23 @@ def resume_display_name(resume_path: str | None) -> str | None:
     return Path(resume_path).name.replace("_", " ")
 
 
+def api_key_status() -> dict[str, bool]:
+    email = current_user_email()
+    if not email:
+        return {"gemini": False, "tavily": False, "hunter": False}
+    user = repo.get_user(email) or {}
+    return {
+        "gemini": bool(user.get("gemini_api_key")),
+        "tavily": bool(user.get("tavily_api_key")),
+        "hunter": bool(user.get("hunter_api_key")),
+    }
+
+
 def user_config(require_search: bool = False, require_draft: bool = False) -> Config:
-    keys = user_api_keys()
-    gemini_key = keys.get("gemini_api_key")
-    tavily_key = keys.get("tavily_api_key")
+    email = current_user_email()
+    user = (repo.get_user(email) if email else None) or {}
+    gemini_key = user.get("gemini_api_key")
+    tavily_key = user.get("tavily_api_key")
     if require_draft and not gemini_key:
         raise RuntimeError("Add your Gemini API key before drafting emails.")
     if require_search and not tavily_key:
@@ -119,86 +86,8 @@ def user_config(require_search: bool = False, require_draft: bool = False) -> Co
     return Config(
         tavily_api_key=tavily_key or "",
         gemini_api_key=gemini_key or "",
-        hunter_api_key=keys.get("hunter_api_key") or None,
+        hunter_api_key=user.get("hunter_api_key") or None,
     )
-
-
-def history_file() -> Path:
-    ensure_web_dirs()
-    return HISTORY_DIR / f"{user_key()}.json"
-
-
-def user_drafts_file() -> Path:
-    ensure_web_dirs()
-    return ROOT / "data" / f"drafts_{user_key()}.json"
-
-
-def history() -> list[dict[str, Any]]:
-    items = json_load(history_file(), [])
-    if items:
-        return items
-    legacy_drafts = json_load(DEFAULT_DRAFTS_FILE, [])
-    for draft in legacy_drafts:
-        if not draft.get("company"):
-            continue
-        items.append(
-            {
-                "company": draft.get("company"),
-                "role": draft.get("role"),
-                "to": draft.get("to", ""),
-                "subject": draft.get("subject", ""),
-                "status": draft.get("status", "drafted"),
-                "gmail_message_id": draft.get("gmail_message_id"),
-            }
-        )
-    if items:
-        save_history(items)
-    return items
-
-
-def save_history(items: list[dict[str, Any]]) -> None:
-    json_save(history_file(), items)
-
-
-def company_key(company: str | None) -> str:
-    return re.sub(r"\W+", "", (company or "").lower())
-
-
-def valid_email(value: str | None) -> bool:
-    return bool(value and "@" in value and "." in value.rsplit("@", 1)[-1])
-
-
-def history_company_keys() -> set[str]:
-    return {company_key(item.get("company")) for item in history() if item.get("company")}
-
-
-def remember_company(draft: dict[str, Any], status: str) -> None:
-    items = history()
-    key = company_key(draft.get("company"))
-    for item in items:
-        if company_key(item.get("company")) == key:
-            item.update(
-                {
-                    "role": draft.get("role"),
-                    "to": draft.get("to", ""),
-                    "subject": draft.get("subject", ""),
-                    "status": status,
-                    "gmail_message_id": draft.get("gmail_message_id", item.get("gmail_message_id")),
-                }
-            )
-            break
-    else:
-        items.append(
-            {
-                "company": draft.get("company"),
-                "role": draft.get("role"),
-                "to": draft.get("to", ""),
-                "subject": draft.get("subject", ""),
-                "status": status,
-                "gmail_message_id": draft.get("gmail_message_id"),
-            }
-        )
-    save_history(items)
 
 
 def friendly_error(exc: Exception) -> str:
@@ -226,13 +115,14 @@ def credentials_to_dict(creds: Credentials) -> dict[str, Any]:
     }
 
 
-def load_web_credentials() -> Credentials | None:
-    if not WEB_TOKEN_FILE.exists():
+def load_web_credentials(email: str) -> Credentials | None:
+    token_data = repo.get_gmail_token(email)
+    if not token_data:
         return None
-    creds = Credentials.from_authorized_user_file(str(WEB_TOKEN_FILE), SCOPES)
+    creds = Credentials.from_authorized_user_info(token_data, SCOPES)
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        json_save(WEB_TOKEN_FILE, credentials_to_dict(creds))
+        repo.save_gmail_token(email, user_key(), credentials_to_dict(creds))
     return creds if creds.valid else None
 
 
@@ -246,7 +136,7 @@ def google_flow() -> Flow:
     )
 
 
-def user_info(creds: Credentials) -> dict[str, Any]:
+def fetch_user_info(creds: Credentials) -> dict[str, Any]:
     response = requests.get(
         "https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {creds.token}"},
@@ -257,45 +147,37 @@ def user_info(creds: Credentials) -> dict[str, Any]:
 
 
 def gmail_service():
-    creds = load_web_credentials()
+    email = current_user_email()
+    if not email:
+        raise RuntimeError("Please sign in with Google first.")
+    creds = load_web_credentials(email)
     if not creds:
         raise RuntimeError("Please sign in with Google first.")
     return build("gmail", "v1", credentials=creds)
 
 
 def signed_in_user() -> dict[str, Any] | None:
-    creds = load_web_credentials()
-    if not creds:
-        return None
-    if not session.get("user"):
-        session["user"] = user_info(creds)
     return session.get("user")
 
 
-def require_signed_in() -> None:
-    if not signed_in_user():
+def require_signed_in() -> str:
+    """Returns the signed-in user's email, or raises if nobody is signed in."""
+    email = current_user_email()
+    if not email:
         raise RuntimeError("Sign in with Google first.")
+    return email
 
 
 def public_drafts() -> list[dict[str, Any]]:
-    drafts = json_load(user_drafts_file(), [])
     email = current_user_email()
+    if not email:
+        return []
+    drafts = repo.list_drafts(email)
     visible = []
-    for index, draft in enumerate(drafts):
-        draft_user = draft.get("user_email")
-        if draft_user and email and draft_user != email:
-            continue
-        if draft.get("status") == "removed":
-            continue
+    for draft in drafts:
         if draft.get("status") == "pending_approval" and not valid_email(draft.get("to")):
             draft = {**draft, "status": "needs_contact"}
-        visible.append(
-            {
-                **draft,
-                "index": index,
-                "resume_name": resume_display_name(draft.get("resume_path")),
-            }
-        )
+        visible.append({**draft, "resume_name": resume_display_name(draft.get("resume_path"))})
     return visible
 
 
@@ -308,12 +190,13 @@ def queue_context() -> dict[str, Any]:
     ]
     needs_contact = [draft for draft in drafts if draft.get("status") == "needs_contact"]
     current = pending[0] if pending else None
+    email = current_user_email()
     return {
         "drafts": drafts,
         "current_draft": current,
         "pending_count": len(pending),
         "needs_contact": needs_contact,
-        "history": history(),
+        "history": repo.history(email) if email else [],
     }
 
 
@@ -329,17 +212,22 @@ def handle_error(exc: Exception):
 def index():
     user = signed_in_user()
     signed_in = user is not None
-    user_data = user_state() if signed_in else {}
-    context = queue_context() if signed_in else {"drafts": [], "current_draft": None, "pending_count": 0, "needs_contact": [], "history": []}
+    db_user = repo.get_user(current_user_email()) if signed_in else None
+    resume_path = (db_user or {}).get("resume_path")
+    context = (
+        queue_context()
+        if signed_in
+        else {"drafts": [], "current_draft": None, "pending_count": 0, "needs_contact": [], "history": []}
+    )
     return render_template(
         "index.html",
         signed_in=signed_in,
         user=user,
-        resume_path=user_data.get("resume_path"),
-        resume_name=resume_display_name(user_data.get("resume_path")),
+        resume_path=resume_path,
+        resume_name=resume_display_name(resume_path),
         api_key_status=api_key_status(),
-        internships_count=len(json_load(DEFAULT_SEARCH_FILE, [])),
-        contacts_count=len(json_load(DEFAULT_CONTACTS_FILE, [])),
+        internships_count=repo.count_opportunities(),
+        contacts_count=repo.count_contacts(),
         drafts=context["drafts"],
         current_draft=context["current_draft"],
         pending_count=context["pending_count"],
@@ -353,15 +241,32 @@ def history_page():
     user = signed_in_user()
     if not user:
         return redirect(url_for("index"))
-    user_data = user_state()
+    db_user = repo.get_user(current_user_email()) or {}
+    resume_path = db_user.get("resume_path")
     return render_template(
         "history.html",
         signed_in=True,
         user=user,
-        resume_path=user_data.get("resume_path"),
-        resume_name=resume_display_name(user_data.get("resume_path")),
+        resume_path=resume_path,
+        resume_name=resume_display_name(resume_path),
         api_key_status=api_key_status(),
-        history=history(),
+        history=repo.history(current_user_email()),
+    )
+
+
+@app.get("/stats")
+def stats_page():
+    user = signed_in_user()
+    if not user:
+        return redirect(url_for("index"))
+    db_user = repo.get_user(current_user_email()) or {}
+    return render_template(
+        "stats.html",
+        signed_in=True,
+        user=user,
+        resume_name=resume_display_name(db_user.get("resume_path")),
+        api_key_status=api_key_status(),
+        stats=aggregate_stats(db),
     )
 
 
@@ -382,24 +287,29 @@ def oauth_callback():
     flow = google_flow()
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    ensure_web_dirs()
-    json_save(WEB_TOKEN_FILE, credentials_to_dict(creds))
-    session["user"] = user_info(creds)
+    info = fetch_user_info(creds)
+    email = info.get("email")
+    if not email:
+        raise RuntimeError("Google did not return an email address for this account.")
+    session["user"] = info
+    key = re.sub(r"[^a-zA-Z0-9_.-]+", "_", email).strip("_") or "local"
+    repo.save_gmail_token(email, key, credentials_to_dict(creds))
     return redirect(url_for("index"))
 
 
 @app.post("/api/logout")
 def logout():
+    email = current_user_email()
+    if email:
+        repo.clear_gmail_token(email)
     session.clear()
-    if WEB_TOKEN_FILE.exists():
-        WEB_TOKEN_FILE.unlink()
     return jsonify({"ok": True})
 
 
 @app.post("/api/upload")
 def upload_resume():
     require_signed_in()
-    ensure_web_dirs()
+    ensure_dirs()
     file = request.files.get("resume")
     if not file or not file.filename:
         return jsonify({"ok": False, "error": "Choose a resume PDF first."}), 400
@@ -409,26 +319,20 @@ def upload_resume():
     filename = secure_filename(file.filename)
     path = UPLOAD_DIR / filename
     file.save(path)
-    user_data = user_state()
-    user_data["resume_path"] = str(path)
-    save_user_state(user_data)
+    repo.save_resume_path(current_user_email(), user_key(), str(path))
     return jsonify({"ok": True, "resume_path": str(path)})
 
 
 @app.post("/api/settings")
 def save_settings():
     require_signed_in()
-    user_data = user_state()
-    keys = user_data.setdefault("api_keys", {})
-    for form_name, key_name in [
-        ("gemini_api_key", "gemini_api_key"),
-        ("tavily_api_key", "tavily_api_key"),
-        ("hunter_api_key", "hunter_api_key"),
-    ]:
-        value = request.form.get(form_name, "").strip()
-        if value:
-            keys[key_name] = value
-    save_user_state(user_data)
+    repo.save_api_keys(
+        current_user_email(),
+        user_key(),
+        gemini_api_key=request.form.get("gemini_api_key", "").strip() or None,
+        tavily_api_key=request.form.get("tavily_api_key", "").strip() or None,
+        hunter_api_key=request.form.get("hunter_api_key", "").strip() or None,
+    )
     return jsonify({"ok": True, "api_key_status": api_key_status()})
 
 
@@ -436,24 +340,22 @@ def save_settings():
 def api_search():
     require_signed_in()
     limit = int(request.form.get("limit", 10))
+    email = current_user_email()
+    run_id = new_run_id()
     try:
         config = user_config(require_search=True)
-        internships = search_internships(limit, config)
-        contacts = find_contacts(DEFAULT_SEARCH_FILE, config)
+        search_internships(limit, config, repo, run_id=run_id, user_email=email)
+        find_contacts(repo.list_opportunities(), config, repo, run_id=run_id, user_email=email)
         warning = None
     except Exception as exc:
-        cached_internships = json_load(DEFAULT_SEARCH_FILE, [])
-        cached_contacts = json_load(DEFAULT_CONTACTS_FILE, [])
-        if not cached_internships:
+        if not repo.list_opportunities(limit):
             raise
-        internships = cached_internships[:limit]
-        contacts = cached_contacts
         warning = friendly_error(exc)
     return jsonify(
         {
             "ok": True,
-            "internships_count": len(internships),
-            "contacts_count": len(contacts),
+            "internships_count": repo.count_opportunities(),
+            "contacts_count": repo.count_contacts(),
             "warning": warning,
         }
     )
@@ -463,19 +365,16 @@ def api_search():
 def api_draft():
     require_signed_in()
     config = user_config(require_draft=True)
-    user_data = user_state()
-    resume_path = user_data.get("resume_path")
+    email = current_user_email()
+    db_user = repo.get_user(email) or {}
+    resume_path = db_user.get("resume_path")
     if not resume_path:
         return jsonify({"ok": False, "error": "Upload a resume first."}), 400
 
     limit = int(request.form.get("limit", 10))
-    contacts = json_load(DEFAULT_CONTACTS_FILE, [])
-    blocked_companies = history_company_keys()
-    existing_companies = {
-        company_key(draft.get("company"))
-        for draft in public_drafts()
-        if draft.get("status") != "removed"
-    }
+    contacts = repo.list_contacts()
+    blocked_companies = repo.history_company_keys(email)
+    existing_companies = repo.existing_draft_company_keys(email)
     candidates = [
         contact
         for contact in contacts
@@ -484,26 +383,20 @@ def api_draft():
         and company_key(contact.get("company")) not in existing_companies
     ][:limit]
     if not candidates:
-        return jsonify(
-            {
-                "ok": False,
-                "error": "No sendable contacts found. Add a Hunter key, rerun Find leads, or use job source links directly.",
-                **queue_context(),
-            }
-        ), 400
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "No sendable contacts found. Add a Hunter key, rerun Find leads, or use job source links directly.",
+                    **queue_context(),
+                }
+            ),
+            400,
+        )
 
-    temp_contacts = ROOT / "data" / f"web_contacts_{user_key()}.json"
-    drafts_file = user_drafts_file()
-    before_count = len(json_load(drafts_file, []))
-    json_save(temp_contacts, candidates)
-    draft_emails(Path(resume_path), temp_contacts, limit, drafts_file, config)
-
-    all_drafts = json_load(drafts_file, [])
-    for draft in all_drafts[before_count:]:
-        draft["user_email"] = current_user_email()
-        draft["resume_path"] = resume_path
-        remember_company(draft, "drafted")
-    json_save(drafts_file, all_drafts)
+    created = draft_emails(Path(resume_path), candidates, limit, config, repo, email)
+    for draft in created:
+        repo.remember_company(email, draft, "drafted")
     return jsonify({"ok": True, **queue_context()})
 
 
@@ -513,52 +406,48 @@ def api_drafts():
     return jsonify({"ok": True, **queue_context()})
 
 
-@app.post("/api/drafts/<int:index>/skip")
-def api_skip(index: int):
+@app.get("/api/stats")
+def api_stats():
     require_signed_in()
-    drafts = json_load(user_drafts_file(), [])
-    if index < 0 or index >= len(drafts):
+    return jsonify({"ok": True, "stats": aggregate_stats(db)})
+
+
+@app.post("/api/drafts/<int:draft_id>/skip")
+def api_skip(draft_id: int):
+    email = require_signed_in()
+    draft = repo.update_draft_status(email, draft_id, "removed")
+    if draft is None:
         return jsonify({"ok": False, "error": "Draft not found."}), 404
-    drafts[index]["status"] = "removed"
-    remember_company(drafts[index], "removed")
-    json_save(user_drafts_file(), drafts)
-    return jsonify({"ok": True, "draft": {**drafts[index], "index": index}})
+    repo.remember_company(email, draft, "removed")
+    return jsonify({"ok": True, "draft": draft})
 
 
-@app.post("/api/drafts/<int:index>/remove")
-def api_remove(index: int):
-    return api_skip(index)
+@app.post("/api/drafts/<int:draft_id>/remove")
+def api_remove(draft_id: int):
+    return api_skip(draft_id)
 
 
-@app.post("/api/drafts/<int:index>/send")
-def api_send(index: int):
-    require_signed_in()
-    drafts = json_load(user_drafts_file(), [])
-    if index < 0 or index >= len(drafts):
+@app.post("/api/drafts/<int:draft_id>/send")
+def api_send(draft_id: int):
+    email = require_signed_in()
+    draft = repo.get_draft(email, draft_id)
+    if draft is None:
         return jsonify({"ok": False, "error": "Draft not found."}), 404
-    draft = drafts[index]
     if not draft.get("to") or "@" not in draft["to"]:
-        draft["status"] = "missing_email"
-        remember_company(draft, "missing_email")
-        json_save(user_drafts_file(), drafts)
-        return jsonify({"ok": False, "error": "Draft has no valid recipient.", "draft": draft}), 400
+        updated = repo.update_draft_status(email, draft_id, "missing_email")
+        assert updated is not None
+        repo.remember_company(email, updated, "missing_email")
+        return jsonify({"ok": False, "error": "Draft has no valid recipient.", "draft": updated}), 400
     if draft.get("status") == "sent":
-        return jsonify({"ok": True, "draft": {**draft, "index": index}})
+        return jsonify({"ok": True, "draft": draft})
 
-    sent = send_message(
-        gmail_service(),
-        draft["to"],
-        draft["subject"],
-        draft["body"],
-        draft.get("resume_path"),
-    )
-    draft["status"] = "sent"
-    draft["gmail_message_id"] = sent.get("id")
-    remember_company(draft, "sent")
-    json_save(user_drafts_file(), drafts)
-    return jsonify({"ok": True, "draft": {**draft, "index": index}})
+    sent = send_message(gmail_service(), draft["to"], draft["subject"], draft["body"], draft.get("resume_path"))
+    updated = repo.update_draft_status(email, draft_id, "sent", gmail_message_id=sent.get("id"))
+    assert updated is not None
+    repo.remember_company(email, updated, "sent")
+    return jsonify({"ok": True, "draft": updated})
 
 
 if __name__ == "__main__":
-    ensure_web_dirs()
+    ensure_dirs()
     app.run(host="127.0.0.1", port=5001, debug=True)

@@ -1,4 +1,4 @@
-<article class="draft" data-index="{{ draft.index }}" data-status="{{ draft.status }}">
+<article class="draft" data-id="{{ draft.id }}" data-status="{{ draft.status }}">
   <div class="draft-meta">
     <div>
       <h3>{{ draft.company }}</h3>
@@ -26,8 +26,8 @@
 
   <div class="draft-actions">
     <a class="source" href="{{ draft.source_url }}" target="_blank" rel="noreferrer">Source</a>
-    <button class="ghost" data-action="remove" data-index="{{ draft.index }}">Remove</button>
-    <button class="primary" data-action="send" data-index="{{ draft.index }}" {% if not draft.to or draft.status == "sent" %}disabled{% endif %}>
+    <button class="ghost" data-action="remove" data-id="{{ draft.id }}">Remove</button>
+    <button class="primary" data-action="send" data-id="{{ draft.id }}" {% if not draft.to or draft.status == "sent" %}disabled{% endif %}>
       Send
     </button>
   </div>

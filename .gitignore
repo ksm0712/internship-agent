@@ -14,6 +14,12 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # mac junk
 .DS_Store
