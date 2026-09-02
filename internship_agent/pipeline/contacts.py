@@ -1,18 +1,12 @@
 """Stage 2: resolve a recipient contact for each opportunity.
 
-The original agent resolved contacts one company at a time with a flat
-`time.sleep(2)` between each, so N companies always took at least 2*N seconds
-regardless of how fast the APIs actually responded. This resolves companies
-concurrently with a bounded thread pool; Hunter.io calls share a token-bucket
-rate limiter (see `clients.hunter_client`) so concurrency doesn't turn into a
-burst of 429s. Domain lookups (Tavily search + Gemini pick) are cached, since
-a company's official domain doesn't change between runs.
+Companies resolve concurrently on a bounded thread pool. Hunter.io calls
+share a rate limiter (clients.hunter_client) so concurrency doesn't turn
+into a burst of 429s; domain lookups are cached since a company's domain
+doesn't change between runs.
 
-Each worker returns its own call/cache/error counts rather than mutating a
-shared `StageTimer` directly — sqlite3 connections are thread-local, and a
-dataclass counter isn't safe to increment from multiple threads without a
-lock, so we aggregate in the main thread as futures complete instead of
-introducing one.
+Workers return their own call/cache/error counts rather than mutating a
+shared StageTimer directly; the main thread aggregates as futures complete.
 """
 from __future__ import annotations
 

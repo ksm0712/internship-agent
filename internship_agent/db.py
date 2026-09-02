@@ -1,24 +1,8 @@
-"""SQLite storage engine.
+"""SQLite storage engine: schema, connections, WAL mode.
 
-Replaces the flat JSON files the original app read and rewrote wholesale on
-every mutation (`data/internships.json`, `data/contacts.json`,
-`data/drafts_<user>.json`, `data/history/<user>.json`, `data/web_state.json`).
-That approach doesn't have real query support, keys, or safe concurrent
-writers — every save serialized the *entire* collection. SQLite in WAL mode
-gives indexed lookups, foreign keys, and safe multi-threaded/multi-process
-access without adding infrastructure (Postgres/etc.) this single-host app
-doesn't need.
-
-It also fixes a real bug in the old layout: the Gmail OAuth token lived in one
-shared `data/web_google_token.json` for every signed-in user, so a second
-Google account signing in on the same server would overwrite the first
-account's send credentials — any pending "approve and send" from the first
-user would then send through the second user's Gmail. `users.gmail_oauth_token_enc`
-scopes that token per account, encrypted like the BYO API keys.
-
-Each thread gets its own connection to the same database file (SQLite
-connections aren't safe to share across threads); WAL mode lets those
-connections read concurrently and serializes writers without blocking readers.
+Each thread gets its own connection to the database file — SQLite
+connections aren't safe to share across threads. WAL mode lets those
+connections read concurrently without blocking writers.
 """
 from __future__ import annotations
 
@@ -75,6 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
     tavily_api_key_enc BLOB,
     hunter_api_key_enc BLOB,
     gmail_oauth_token_enc BLOB,
+    search_locations TEXT,
+    search_roles TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -94,6 +80,7 @@ CREATE TABLE IF NOT EXISTS drafts (
     source_url TEXT,
     contact_source TEXT,
     gmail_message_id TEXT,
+    fit_score REAL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -159,11 +146,9 @@ class Database:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         if str(self.path) != ":memory:":
-            # busy_timeout has to be set *before* the journal_mode switch, not
-            # after: two processes racing to open the same fresh database file
-            # (e.g. Flask's debug reloader briefly running old + new workers)
-            # can hit "database is locked" on the WAL-mode switch itself if
-            # nothing is set yet to make sqlite retry instead of failing fast.
+            # busy_timeout before journal_mode, not after — otherwise the
+            # WAL-mode switch itself has nothing making it retry a lock and
+            # two processes opening a fresh db at once hit "database is locked".
             conn.execute("PRAGMA busy_timeout = 5000")
             conn.execute("PRAGMA journal_mode = WAL")
         with self._connections_lock:
@@ -176,8 +161,33 @@ class Database:
         with self._schema_lock:
             if not self._schema_ready:
                 conn.executescript(SCHEMA)
+                self._apply_column_migrations(conn)
                 conn.commit()
                 self._schema_ready = True
+
+    @staticmethod
+    def _apply_column_migrations(conn: sqlite3.Connection) -> None:
+        """Add columns introduced after a database file already existed.
+
+        `CREATE TABLE IF NOT EXISTS` above only covers brand-new databases;
+        an existing one (e.g. from before `search_locations`/`search_roles`
+        were added) needs an explicit ALTER TABLE, or those columns simply
+        never show up and every query referencing them errors.
+        """
+        added_columns = {
+            "users": [
+                ("search_locations", "TEXT"),
+                ("search_roles", "TEXT"),
+            ],
+            "drafts": [
+                ("fit_score", "REAL"),
+            ],
+        }
+        for table, columns in added_columns.items():
+            existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for name, col_type in columns:
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")
 
     def connection(self) -> sqlite3.Connection:
         conn: sqlite3.Connection | None = getattr(self._local, "conn", None)

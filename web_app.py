@@ -239,6 +239,8 @@ def index():
         api_key_status=api_key_status(),
         internships_count=repo.count_opportunities(),
         contacts_count=repo.count_contacts(),
+        saved_locations=(db_user or {}).get("search_locations", []),
+        saved_roles=(db_user or {}).get("search_roles", []),
         drafts=context["drafts"],
         current_draft=context["current_draft"],
         pending_count=context["pending_count"],
@@ -349,13 +351,17 @@ def save_settings():
 
 @app.post("/api/search")
 def api_search():
-    require_signed_in()
+    email = require_signed_in()
     limit = int(request.form.get("limit", 10))
-    email = current_user_email()
+    locations = [loc for loc in request.form.getlist("locations") if loc.strip()]
+    roles = [role for role in request.form.getlist("roles") if role.strip()]
     run_id = new_run_id()
+    repo.save_search_prefs(email, user_key(), locations=locations, roles=roles)
     try:
         config = user_config(require_search=True)
-        search_internships(limit, config, repo, run_id=run_id, user_email=email)
+        search_internships(
+            limit, config, repo, locations=locations, roles=roles, run_id=run_id, user_email=email
+        )
         find_contacts(repo.list_opportunities(), config, repo, run_id=run_id, user_email=email)
         warning = None
     except Exception as exc:
@@ -392,7 +398,7 @@ def api_draft():
         if valid_email(contact.get("email"))
         if company_key(contact.get("company")) not in blocked_companies
         and company_key(contact.get("company")) not in existing_companies
-    ][:limit]
+    ]
     if not candidates:
         return (
             jsonify(

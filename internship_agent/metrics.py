@@ -1,12 +1,7 @@
 """Pipeline run metrics: per-stage timing/throughput, persisted to SQLite.
 
-The original agent had no instrumentation beyond `print()` statements, so
-there was no way to answer "how long does a search take", "how often does the
-LLM extraction fail", or "how much is caching actually saving" without
-re-running it by hand while watching a clock. `StageTimer` records
-start/end/counts for one pipeline stage (search / contacts / draft) to the
-`run_metrics` table; `aggregate_stats()` rolls those rows up into the numbers
-shown on `/api/stats` and the dashboard strip in the UI.
+`StageTimer` records start/end/counts for one stage run to `run_metrics`;
+`aggregate_stats()` rolls those rows into the numbers on `/api/stats`.
 """
 from __future__ import annotations
 

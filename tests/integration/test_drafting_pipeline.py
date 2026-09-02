@@ -125,6 +125,41 @@ class TestDraftEmails:
         assert len({d["id"] for d in created}) == 10  # every draft got a distinct row id
         assert len(repo.list_drafts("a@example.com")) == 10
 
+    def test_created_drafts_include_a_fit_score(self, repo, resume_file, monkeypatch):
+        gemini = ScriptedGemini([{"subject": "s", "body": "b"}])
+        monkeypatch.setattr(drafting_module, "GeminiClient", lambda api_key: gemini)
+
+        created = drafting_module.draft_emails(
+            resume_file, [_contact("Acme")], 10, _config(), repo, "a@example.com"
+        )
+
+        assert 0.0 <= created[0]["fit_score"] <= 1.0
+        assert repo.list_drafts("a@example.com")[0]["fit_score"] == created[0]["fit_score"]
+
+    def test_limit_keeps_the_best_matching_candidates_not_just_the_first_n(
+        self, repo, resume_file, monkeypatch
+    ):
+        # resume_file (see conftest) mentions Python, Flask, React, SQL.
+        good_match = _contact(
+            "Acme",
+            role="Python Backend Intern",
+            description="Build Flask APIs backed by SQL.",
+        )
+        bad_match = _contact(
+            "Globex",
+            role="Sales Development Intern",
+            description="Cold call prospective customers.",
+        )
+        gemini = ScriptedGemini([{"subject": "s", "body": "b"}])
+        monkeypatch.setattr(drafting_module, "GeminiClient", lambda api_key: gemini)
+
+        created = drafting_module.draft_emails(
+            resume_file, [bad_match, good_match], 1, _config(), repo, "a@example.com"
+        )
+
+        assert len(created) == 1
+        assert created[0]["company"] == "Acme"
+
     def test_records_run_metrics_with_fallback_counted_as_error(self, repo, resume_file, monkeypatch):
         gemini = ScriptedGemini([RuntimeError("down")])
         monkeypatch.setattr(drafting_module, "GeminiClient", lambda api_key: gemini)

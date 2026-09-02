@@ -17,7 +17,7 @@ class TestCliDispatch:
     def test_search_command_calls_pipeline_and_prints_summary(self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(cli, "load_config", lambda: object())
         monkeypatch.setattr(
-            cli, "search_internships", lambda limit, config, repo: [{"company": "Acme"}]
+            cli, "search_internships", lambda limit, config, repo, **kwargs: [{"company": "Acme"}]
         )
         _run(monkeypatch, ["search", "--limit", "5"], tmp_path)
         assert "Found 1 new opportunities" in capsys.readouterr().out

@@ -4,7 +4,12 @@
       <h3>{{ draft.company }}</h3>
       <p>{{ draft.role }}</p>
     </div>
-    <span class="pill {{ draft.status }}">{{ draft.status.replace("_", " ") }}</span>
+    <div class="draft-meta-badges">
+      {% if draft.fit_score is not none %}
+        <span class="match-badge" title="Predicted fit score">Match {{ (draft.fit_score * 100) | round | int }}%</span>
+      {% endif %}
+      <span class="pill {{ draft.status }}">{{ draft.status.replace("_", " ") }}</span>
+    </div>
   </div>
 
   <dl class="mail-meta">

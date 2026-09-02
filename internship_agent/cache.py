@@ -1,13 +1,8 @@
-"""TTL cache for external lookups, backed by the `cache_entries` SQLite table.
+"""TTL cache for external lookups, backed by the `cache_entries` table.
 
-`choose_domain()` and Hunter.io domain-search calls are pure functions of
-(company name) / (domain) that don't change within a run, and rarely change
-across runs of the same session. The original agent had no cache at all: two
-searches five minutes apart re-spent the same Tavily/Gemini/Hunter calls.
-Caching these keeps a slow-changing external answer around for `ttl_seconds`
-so repeat lookups are a local read instead of a network round trip; hit/miss
-counts feed `internship_agent.metrics` for the cache-hit-rate metric surfaced
-in `/api/stats`.
+Company domain resolution doesn't change within a session, so caching it
+turns a repeat lookup into a local read instead of a Tavily+Gemini round
+trip. Hit/miss counts feed the cache-hit-rate metric in `/api/stats`.
 """
 from __future__ import annotations
 

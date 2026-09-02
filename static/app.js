@@ -5,6 +5,113 @@ const resumeLabel = document.querySelector("#resume-label");
 const historyList = document.querySelector("#history-list");
 const needsContactEl = document.querySelector("#needs-contact");
 
+// Tag-input: Enter/comma adds a chip, click "x" removes it. Suggestion list
+// is optional and just a convenience — free-typed values are accepted too.
+function createTagInput({ tagListEl, inputEl, suggestionsEl, suggestions, initial }) {
+  let tags = [...(initial || [])];
+
+  function render() {
+    tagListEl.innerHTML = tags
+      .map(
+        (tag, i) => `
+          <span class="tag-chip">
+            ${tag.replace(/</g, "&lt;")}
+            <button type="button" class="tag-remove" data-index="${i}" aria-label="Remove ${tag}">&times;</button>
+          </span>
+        `,
+      )
+      .join("");
+  }
+
+  function addTag(value) {
+    const trimmed = value.trim();
+    if (!trimmed || tags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
+    tags.push(trimmed);
+    render();
+  }
+
+  function removeTag(index) {
+    tags.splice(index, 1);
+    render();
+  }
+
+  function hideSuggestions() {
+    if (suggestionsEl) {
+      suggestionsEl.hidden = true;
+      suggestionsEl.innerHTML = "";
+    }
+  }
+
+  function showSuggestions(query) {
+    if (!suggestionsEl || !suggestions) return;
+    const q = query.trim().toLowerCase();
+    if (!q) return hideSuggestions();
+    const matches = suggestions
+      .filter((s) => s.toLowerCase().includes(q) && !tags.some((t) => t.toLowerCase() === s.toLowerCase()))
+      .slice(0, 8);
+    if (!matches.length) return hideSuggestions();
+    suggestionsEl.innerHTML = matches
+      .map((m) => `<button type="button" class="tag-suggestion" data-value="${m.replace(/"/g, "&quot;")}">${m}</button>`)
+      .join("");
+    suggestionsEl.hidden = false;
+  }
+
+  tagListEl.addEventListener("click", (event) => {
+    const button = event.target.closest(".tag-remove");
+    if (button) removeTag(Number(button.dataset.index));
+  });
+
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTag(inputEl.value);
+      inputEl.value = "";
+      hideSuggestions();
+    } else if (event.key === "Backspace" && !inputEl.value && tags.length) {
+      removeTag(tags.length - 1);
+    }
+  });
+
+  inputEl.addEventListener("input", () => showSuggestions(inputEl.value));
+  inputEl.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
+
+  suggestionsEl?.addEventListener("click", (event) => {
+    const button = event.target.closest(".tag-suggestion");
+    if (!button) return;
+    addTag(button.dataset.value);
+    inputEl.value = "";
+    inputEl.focus();
+    hideSuggestions();
+  });
+
+  render();
+  return { getTags: () => [...tags] };
+}
+
+let locationTagInput = null;
+let roleTagInput = null;
+
+function initSearchPreferenceInputs() {
+  const locationTagsEl = document.querySelector("#location-tags");
+  const roleTagsEl = document.querySelector("#role-tags");
+  if (!locationTagsEl || !roleTagsEl) return;
+
+  locationTagInput = createTagInput({
+    tagListEl: locationTagsEl,
+    inputEl: document.querySelector("#location-input"),
+    suggestionsEl: document.querySelector("#location-suggestions"),
+    suggestions: window.LOCATION_SUGGESTIONS || [],
+    initial: window.savedLocations || [],
+  });
+  roleTagInput = createTagInput({
+    tagListEl: roleTagsEl,
+    inputEl: document.querySelector("#role-input"),
+    initial: window.savedRoles || [],
+  });
+}
+
+initSearchPreferenceInputs();
+
 function updateKeyStatus(status) {
   window.keyStatus = status || window.keyStatus || {};
   document.querySelector('[data-action="search"]')?.toggleAttribute(
@@ -63,6 +170,10 @@ function renderDraft(draft) {
   }
   const disabled = !draft.to || draft.status === "sent" ? "disabled" : "";
   const statusText = String(draft.status || "").replaceAll("_", " ");
+  const matchBadge =
+    draft.fit_score === null || draft.fit_score === undefined
+      ? ""
+      : `<span class="match-badge" title="Predicted fit score">Match ${Math.round(draft.fit_score * 100)}%</span>`;
   return `
     <article class="draft" data-id="${draft.id}" data-status="${escapeHtml(draft.status)}">
       <div class="draft-meta">
@@ -70,7 +181,10 @@ function renderDraft(draft) {
           <h3>${escapeHtml(draft.company)}</h3>
           <p>${escapeHtml(draft.role)}</p>
         </div>
-        <span class="pill ${escapeHtml(draft.status)}">${escapeHtml(statusText)}</span>
+        <div class="draft-meta-badges">
+          ${matchBadge}
+          <span class="pill ${escapeHtml(draft.status)}">${escapeHtml(statusText)}</span>
+        </div>
       </div>
 
       <dl class="mail-meta">
@@ -205,6 +319,8 @@ document.addEventListener("click", async (event) => {
       }
       const formData = new FormData();
       formData.set("limit", document.querySelector("#limit").value || "10");
+      for (const loc of locationTagInput?.getTags() || []) formData.append("locations", loc);
+      for (const role of roleTagInput?.getTags() || []) formData.append("roles", role);
       target.disabled = true;
       setNotice("Finding internships and contacts. This can take a minute...");
       const data = await postForm("/api/search", formData);

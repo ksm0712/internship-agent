@@ -1,10 +1,10 @@
 # Internship Agent
 
-A search → contact-resolution → drafting pipeline for internship outreach, with a human-in-the-loop Gmail send step. Runs as a local web app or a CLI.
+I got tired of manually searching for internships, finding the right person to email, and writing a personalized message for each one, so I built a pipeline that does it for me: it searches for live postings, resolves a real hiring contact (not a guessed `careers@` address), drafts a personalized email using my resume, and then waits for me to actually approve it before anything goes out through Gmail. Runs as a local web app or a CLI.
 
-Each user brings their own Google account (for Gmail sending) and their own Gemini/Tavily/Hunter.io API keys — nothing sends automatically, and no email leaves without an explicit approval click.
+You bring your own Google account and your own Gemini/Tavily/Hunter.io keys. I didn't want to be the one paying for everyone else's API usage, and I didn't want to build something that could send an email without a human looking at it first.
 
-[Architecture](ARCHITECTURE.md) has the schema, the pipeline diagram, and the design decisions behind each piece below.
+[ARCHITECTURE.md](ARCHITECTURE.md) has the schema, the pipeline diagram, and the actual bugs I hit while building this (a cache-stampede race, a circuit breaker that was itself getting retried).
 
 ## Screenshots
 
@@ -20,56 +20,62 @@ Each user brings their own Google account (for Gmail sending) and their own Gemi
 
 ![Company history](docs/screenshots/history.png)
 
-## What It Does
+### Pipeline stats
+
+![Run metrics](docs/screenshots/stats.png)
+
+## What it does
 
 1. Sign in with Google so the app can send from your Gmail account.
 2. Add your own Gemini and Tavily keys, plus an optional Hunter.io key.
 3. Upload a resume PDF.
-4. Find current internship leads.
-5. Draft emails using the resume and company details.
+4. Pick locations and roles (or leave both blank to search anywhere, for any tech role).
+5. It drafts emails using your resume and the company's details. Candidates get ranked by predicted fit first (see [ARCHITECTURE.md](ARCHITECTURE.md#lead-ranking)), so the strongest matches get drafted before the per-run limit runs out.
 6. Review one draft at a time.
 7. Click `Send` or `Remove`.
-8. Track company history so the same Google user does not draft the same company twice.
+8. It remembers which companies you've already drafted, per Google account, so a re-run doesn't email the same company twice.
 
-Drafts without a recipient are separated into `Needs contact` and are not sendable until a real email is found.
+If a lead doesn't have a real contact email attached, it lands in a separate `Needs contact` list instead of the send queue — I'd rather show you "couldn't find anyone" than let you send to a guess.
 
 ## Engineering
 
-This started as a single 749-line script writing flat JSON files. The current version:
+The storage layer used to be five separate JSON files, one of which got rewritten wholesale on every single update. That meant no indexes, and re-running a search replaced your whole leads list instead of adding to it. It's SQLite now — 7 tables, WAL mode, indexed on the columns that actually get queried in a hot path (company lookups, draft status, run metrics). Your API keys and Gmail OAuth token are encrypted at rest with Fernet, scoped to your account, not stored in plaintext like the original version did. Details in [ARCHITECTURE.md](ARCHITECTURE.md#security).
 
-- **Storage**: a normalized SQLite schema (5 tables, indexed on the lookup columns, WAL mode for concurrent readers/writers) instead of rewriting whole JSON files on every mutation. BYO API keys and the Gmail OAuth token are encrypted at rest (Fernet), not plaintext — the old version stored them as plaintext JSON, and additionally kept the Gmail token in one file shared by *every* signed-in user, so a second Google account signing in could silently take over the first account's send credentials. Both are fixed; see [ARCHITECTURE.md](ARCHITECTURE.md#security).
-- **Concurrency**: contact resolution and drafting run on bounded thread pools instead of a sequential loop with `time.sleep()` between every company. Benchmarked with reproducible simulated API latency (`benchmarks/bench_concurrency.py`, no network or API keys needed to run it):
+Contact resolution and drafting both run on bounded thread pools instead of a sequential loop, with a token-bucket rate limiter (Hunter's limit is per-account, not per-thread, so this actually matters), retry-with-backoff, a circuit breaker, and a single-flighted cache so two workers hitting the same company at the same time don't both pay for a duplicate lookup. `benchmarks/bench_concurrency.py` measures the thread-pool effect in isolation, against a fake client with fixed simulated latency so it's reproducible without live API keys:
 
-  ```text
-  companies: 20, simulated latency: 0.30s/call
-  sequential (1 worker):    18.26s
-  concurrent (5 workers):    3.66s
-  speedup:                   4.99x
-  ```
+```text
+20 companies, 0.3s/call simulated latency
+sequential (1 worker):   18.26s
+concurrent (5 workers):   3.66s
+speedup:                  4.99x
+```
 
-- **Resilience**: every external call (Tavily, Gemini, Hunter.io, Gmail) is wrapped in retry-with-exponential-backoff, and a circuit breaker fails fast once a dependency is down instead of continuing to retry it. Domain-lookup results are cached (TTL) and single-flighted, so concurrent workers can't stampede the same cache key — a real race a concurrency test caught during development (two threads resolving the same company's domain could both miss the cache before either wrote back).
-- **Observability**: every pipeline run records per-stage latency (p50/p95), API call counts, cache hit rate, and error rate to SQLite, surfaced at `/api/stats` and the in-app **Stats** page.
-- **Testing**: 180 pytest tests (unit, integration with mocked external APIs, and Flask route tests) at 87% coverage, clean under `ruff` and `mypy`. CI runs the full suite plus a Docker build on Python 3.11–3.13.
+Every stage logs its own latency (p50/p95), API call count, cache hit rate, and error rate to SQLite — that's the Stats page above. Before this there was no signal beyond stdout.
+
+Drafting candidates get scored by fit before anything gets written: TF-IDF similarity between your resume and the role description, whether the contact came from Hunter or was guessed, and how confident the extraction was. With no history yet, it falls back to a hand-weighted heuristic; once you've sent, skipped, or removed enough drafts, it trains a small logistic regression on your own history instead. `benchmarks/eval_ranker.py` evaluates that same code on a synthetic labeled set (60 train / 60 held-out) and gets **0.784 ROC-AUC** — for reference, 0.5 is random guessing and 1.0 is perfect separation.
+
+216 pytest tests, 88% coverage, `ruff` and `mypy` both clean. CI runs the Python 3.11–3.13 matrix plus a Docker build.
 
 ## Stack
 
 - Python, Flask
-- SQLite (storage) — see [ARCHITECTURE.md](ARCHITECTURE.md)
+- SQLite — see [ARCHITECTURE.md](ARCHITECTURE.md)
+- scikit-learn for the lead-ranking model — see [ARCHITECTURE.md](ARCHITECTURE.md#lead-ranking)
 - Gemini API for extraction and drafting
 - Tavily for web search
 - Hunter.io for contact lookup
 - Gmail API for approved sends
 
-## Local Setup
+## Local setup
 
-Install dependencies (or `requirements-dev.txt` to also get pytest/ruff/mypy):
+Install dependencies (`requirements-dev.txt` also gets you pytest/ruff/mypy):
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-Set an encryption key for stored API keys/tokens (falls back to an insecure dev default with a warning if unset — fine for `localhost`, not for anything shared):
+Set an encryption key for stored API keys and tokens. Without this it falls back to an insecure dev default and prints a warning — fine on `localhost`, not fine for anything you're sharing:
 
 ```bash
 export INTERNSHIP_AGENT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
@@ -81,7 +87,7 @@ Create or update Gmail OAuth credentials:
 python -m internship_agent setup-gmail
 ```
 
-That command asks for your downloaded Google OAuth client JSON and saves it as `credentials.json`. This file is ignored by git.
+That asks for your downloaded Google OAuth client JSON and saves it as `credentials.json`, which is gitignored.
 
 Start the web app:
 
@@ -89,13 +95,9 @@ Start the web app:
 python web_app.py
 ```
 
-Open:
+and open `http://127.0.0.1:5001`.
 
-```text
-http://127.0.0.1:5001
-```
-
-For local Google OAuth, your OAuth client needs this redirect URI:
+Your OAuth client needs this redirect URI configured for local login to work:
 
 ```text
 http://127.0.0.1:5001/oauth2callback
@@ -107,50 +109,38 @@ http://127.0.0.1:5001/oauth2callback
 docker compose up --build
 ```
 
-Serves the same app on `http://localhost:5001`, backed by a SQLite file under `./data` on the host. Set `FLASK_SECRET_KEY` / `INTERNSHIP_AGENT_SECRET_KEY` in your shell first if you want anything other than the dev defaults.
+Serves the same app on `http://localhost:5001`, backed by a SQLite file under `./data` on the host. Set `FLASK_SECRET_KEY` / `INTERNSHIP_AGENT_SECRET_KEY` in your shell first if you don't want the dev defaults.
 
-## Google OAuth: Cornell-Only / Organization Restricted Fix
+## Google OAuth: Cornell-only / organization-restricted fix
 
-If Google says the app is restricted to users inside your organization, the OAuth consent screen is set to `Internal`.
+If Google says the app is restricted to your organization, the OAuth consent screen is set to `Internal` — meaning only accounts inside the Google Workspace org that owns the project can authorize it. If that project is under Cornell, that's effectively Cornell accounts only.
 
-`Internal` means only users inside the Google Workspace organization that owns the Google Cloud project can authorize the app. If the project is under Cornell, that effectively means Cornell accounts only. Google's app audience docs describe `External` apps as available to any Google account and `Internal` apps as limited to the owning organization.
-
-To let any Google account use it:
+To open it up to any Google account:
 
 1. Open Google Cloud Console for the project that owns `credentials.json`.
-2. Go to `Google Auth Platform` or `APIs & Services` -> `OAuth consent screen`.
+2. Go to `Google Auth Platform` (or `APIs & Services` → `OAuth consent screen`).
 3. Find `Audience` / `User type`.
-4. Change the app from `Internal` to `External`.
-5. While testing, add specific Google accounts as test users.
-6. When you want it generally available, publish the app to production and complete Google verification if required.
+4. Switch it from `Internal` to `External`.
+5. While you're still testing, add specific Google accounts as test users.
+6. When you're ready for it to be generally usable, publish to production and complete Google's verification if it's required.
 
-The app uses the `gmail.send` scope because it only needs to send approved emails. Google classifies `gmail.send` as a sensitive scope, so public production usage may show an unverified warning or require OAuth verification.
+The app only requests the `gmail.send` scope, since sending approved emails is all it needs — but Google treats `gmail.send` as sensitive, so a public production deployment may show an unverified-app warning until you go through OAuth verification.
 
-If the Cornell-owned project does not let you switch to `External`, create a new personal Google Cloud project, enable Gmail API, configure the consent screen as `External`, create a new OAuth client, download its JSON, and rerun:
+If your Cornell-owned project won't let you switch to `External`, the workaround is a personal Google Cloud project instead: enable the Gmail API on it, set the consent screen to `External`, create a new OAuth client, download its JSON, and rerun `python -m internship_agent setup-gmail`.
 
-```bash
-python -m internship_agent setup-gmail
-```
+## Bring your own keys
 
-## Bring Your Own Keys
+Each signed-in user enters their own keys — Gemini (required for drafting), Tavily (required for search), Hunter.io (optional, improves contact discovery). That's what keeps this from becoming something where I'm footing the API bill for anyone who uses it. Keys and the Gmail OAuth token are encrypted at rest (see [ARCHITECTURE.md](ARCHITECTURE.md#security)) and scoped to the signed-in account they belong to.
 
-The web app is designed to avoid the developer paying for everyone else's usage. Each signed-in user enters their own keys in the app:
+## CLI workflow
 
-- Gemini: required for drafting
-- Tavily: required for search
-- Hunter.io: optional, improves recipient discovery
-
-Keys and the Gmail OAuth token are encrypted at rest in SQLite (see [ARCHITECTURE.md](ARCHITECTURE.md#security)), scoped per signed-in Google account.
-
-## CLI Workflow
-
-The original command-line agent still works, now as `python -m internship_agent`:
+The original command-line version still works, now as `python -m internship_agent`:
 
 ```bash
 python -m internship_agent run --resume /absolute/path/to/resume.pdf --limit 15
 ```
 
-Run step by step:
+or run it stage by stage:
 
 ```bash
 python -m internship_agent search --limit 25
@@ -160,13 +150,13 @@ python -m internship_agent send
 python -m internship_agent stats   # print aggregate pipeline metrics
 ```
 
-The CLI send step previews each email:
+The CLI's send step previews every email before it goes out:
 
 ```text
 Send this email? [y]es / [n]o skip / [q]uit:
 ```
 
-No email is sent unless you type `y` for that exact draft.
+Nothing sends unless you type `y` for that specific draft.
 
 ## Testing
 
@@ -176,28 +166,28 @@ ruff check internship_agent web_app.py tests
 mypy internship_agent web_app.py
 ```
 
-`tests/unit` covers pure logic and storage in isolation; `tests/integration` runs the real pipeline stages (including their thread pools) against mocked Tavily/Gemini/Hunter clients; `tests/web` drives the Flask routes with `app.test_client()`. Nothing in the suite makes a real network call or needs API keys. `scripts/manual/` holds ad hoc scripts that *do* hit the real APIs, for sanity-checking your own keys — they're not part of `pytest`.
+`tests/unit` covers pure logic and storage in isolation. `tests/integration` runs the real pipeline stages, thread pools included, against mocked Tavily/Gemini/Hunter clients. `tests/web` drives the Flask routes through `app.test_client()`. None of it makes a real network call or needs an API key. `scripts/manual/` is separate — those scripts *do* hit the live APIs, for sanity-checking your own keys by hand, and aren't part of the `pytest` run.
 
-## Generated Files
+## Generated files
 
-Local generated files are ignored by git:
+Git-ignored, generated locally:
 
 - `credentials.json`
 - `token.json`
-- `data/` (includes `data/internship_agent.db`, the SQLite database)
+- `data/` (including `data/internship_agent.db`, the SQLite database)
 - `out/`
 - `uploads/`
 - `.env`
 
 ## Troubleshooting
 
-If Gmail returns `403 Gmail API has not been used... or it is disabled`, enable Gmail API in the Google Cloud project that owns `credentials.json`, wait a few minutes, then try again.
+**`403 Gmail API has not been used... or it is disabled`** — enable the Gmail API in the Google Cloud project that owns `credentials.json`, wait a few minutes for it to propagate, then try again.
 
-If OAuth blocks non-Cornell or non-organization users, switch the OAuth app audience from `Internal` to `External`.
+**OAuth blocks non-Cornell / non-organization accounts** — switch the OAuth app audience from `Internal` to `External` (see above).
 
-If OAuth blocks a specific test user while the app is in testing mode, add that Google account under test users in the OAuth consent screen.
+**OAuth blocks a specific account while the app is still in testing mode** — add that account under test users in the OAuth consent screen.
 
-If Gemini quota is hit while drafting, wait for the quota window to reset or use another Gemini API key. The app is BYO-key so quota is tied to the key currently saved for that user.
+**Gemini quota errors while drafting** — wait for the quota window to reset, or switch to a different Gemini key. Since this is BYO-key, quota is tied to whatever key is currently saved for your account.
 
 ## References
 

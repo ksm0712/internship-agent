@@ -98,9 +98,6 @@ class TestIsRelevantRole:
         base.update(overrides)
         return base
 
-    def test_accepts_singapore_ai_internship(self):
-        assert is_relevant_role(self._item()) is True
-
     def test_rejects_non_internship(self):
         item = self._item(role="Software Engineer", evidence="Full-time engineering role.")
         assert is_relevant_role(item) is False
@@ -108,23 +105,60 @@ class TestIsRelevantRole:
     def test_rejects_generic_role_titles(self):
         assert is_relevant_role(self._item(role="Careers")) is False
 
-    def test_rejects_non_singapore_role(self):
-        assert is_relevant_role(self._item(location="Memphis, Tennessee", source_url="https://acme.com")) is False
+    # ---- no locations/roles given: falls back to "any location" + DEFAULT_ROLE_TERMS ----
 
-    def test_accepts_remote_role_mentioning_singapore(self):
-        item = self._item(
-            location="Remote",
-            description="Remote AI internship open to Singapore-based applicants.",
-        )
+    def test_no_filters_accepts_any_tech_internship_anywhere(self):
+        item = self._item(location="Memphis, Tennessee")
         assert is_relevant_role(item) is True
 
-    def test_rejects_role_without_ai_tech_terms(self):
+    def test_no_filters_rejects_role_without_any_default_tech_term(self):
         item = self._item(
             role="Marketing Intern",
             description="Help with marketing campaigns.",
             evidence="Marketing internship, no tech focus.",
         )
         assert is_relevant_role(item) is False
+
+    # ---- explicit location filter ----
+
+    def test_location_filter_accepts_matching_location(self):
+        item = self._item(location="Berlin, Germany")
+        assert is_relevant_role(item, locations=["Berlin"]) is True
+
+    def test_location_filter_rejects_non_matching_location(self):
+        item = self._item(location="Memphis, Tennessee")
+        assert is_relevant_role(item, locations=["Singapore", "Berlin"]) is False
+
+    def test_location_filter_accepts_remote_regardless_of_selection(self):
+        item = self._item(location="Remote")
+        assert is_relevant_role(item, locations=["Singapore"]) is True
+
+    def test_location_filter_accepts_location_mentioned_in_description(self):
+        item = self._item(location="Germany", description="Based out of our Berlin office.")
+        assert is_relevant_role(item, locations=["Berlin"]) is True
+
+    # ---- explicit role filter ----
+
+    def test_role_filter_accepts_matching_keyword(self):
+        item = self._item(role="Backend Intern", description="Work on backend services.", evidence="backend intern")
+        assert is_relevant_role(item, roles=["backend"]) is True
+
+    def test_role_filter_rejects_non_matching_keyword(self):
+        item = self._item(
+            role="Marketing Intern", description="Support campaigns.", evidence="marketing internship"
+        )
+        assert is_relevant_role(item, roles=["backend", "machine learning"]) is False
+
+    def test_combined_location_and_role_filters(self):
+        item = self._item(
+            location="Singapore",
+            role="Machine Learning Intern",
+            description="Work on ML systems.",
+            evidence="machine learning internship",
+        )
+        assert is_relevant_role(item, locations=["Singapore"], roles=["machine learning"]) is True
+        assert is_relevant_role(item, locations=["Berlin"], roles=["machine learning"]) is False
+        assert is_relevant_role(item, locations=["Singapore"], roles=["backend"]) is False
 
 
 class TestFuzzyDedup:

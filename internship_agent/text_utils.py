@@ -7,7 +7,10 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
-AI_TECH_TERMS = [
+# Used only as a fallback when the user hasn't typed any role keywords, so
+# search still has *some* relevance signal instead of accepting anything
+# with the word "intern" in it.
+DEFAULT_ROLE_TERMS = [
     "ai",
     "artificial intelligence",
     "machine learning",
@@ -20,12 +23,13 @@ AI_TECH_TERMS = [
     "quant",
     "developer",
 ]
-# Word-boundary matching, not bare substring containment: short terms like
-# "ai" and "ml" otherwise match inside ordinary words ("campAIgn",
-# "avAIlable", "htML"), which was quietly waving through irrelevant leads.
-_AI_TECH_TERMS_PATTERN = re.compile(
-    r"\b(" + "|".join(re.escape(term) for term in AI_TECH_TERMS) + r")\b"
-)
+
+
+def _word_boundary_pattern(terms: list[str]) -> re.Pattern[str]:
+    # Word-boundary matching, not bare substring containment: short terms
+    # like "ai" and "ml" otherwise match inside ordinary words ("campAIgn",
+    # "avAIlable", "htML"), which quietly waves through irrelevant leads.
+    return re.compile(r"\b(" + "|".join(re.escape(t) for t in terms if t.strip()) + r")\b")
 
 # Near-duplicate company names below this similarity are treated as different
 # companies. Tuned against real Tavily extraction noise (e.g. "Acme Inc." vs
@@ -86,7 +90,16 @@ def valid_email(value: str | None) -> bool:
     return bool(local and "." in domain and not domain.startswith("."))
 
 
-def is_relevant_role(item: dict[str, Any]) -> bool:
+def is_relevant_role(
+    item: dict[str, Any],
+    locations: list[str] | None = None,
+    roles: list[str] | None = None,
+) -> bool:
+    """Whether a Gemini-extracted listing matches the user's locations/roles.
+
+    Empty `locations` accepts any location; empty `roles` falls back to
+    DEFAULT_ROLE_TERMS.
+    """
     role_text = " ".join(
         str(item.get(k, "")).lower() for k in ("role", "description", "evidence")
     )
@@ -95,23 +108,26 @@ def is_relevant_role(item: dict[str, Any]) -> bool:
         for k in ("company", "role", "description", "location", "source_url")
     )
     location = str(item.get("location", "")).lower()
-    source_url = str(item.get("source_url", "")).lower()
     role = str(item.get("role", "")).strip().lower()
     if role in {"careers", "jobs", "open roles", "internships"}:
         return False
-    singaporeish = (
-        "singapore" in location
-        or ".sg" in source_url
-        or "mycareersfuture.gov.sg" in source_url
-        or ("remote" in location and "singapore" in full_text)
-    )
-    blocked_locations = ["memphis", "tennessee", "usa", "united states"]
-    if any(place in location for place in blocked_locations) and "singapore" not in location:
-        singaporeish = False
+
+    location_terms = [loc.lower() for loc in (locations or []) if loc.strip()]
+    if not location_terms:
+        location_matches = True
+    else:
+        location_matches = any(
+            term in location or term in full_text or "remote" in location
+            for term in location_terms
+        )
+
+    role_terms = [r.lower() for r in (roles or []) if r.strip()] or DEFAULT_ROLE_TERMS
+    role_pattern = _word_boundary_pattern(role_terms)
+
     return (
         re.search(r"\bintern(ship)?\b", role_text) is not None
-        and singaporeish
-        and _AI_TECH_TERMS_PATTERN.search(role_text) is not None
+        and location_matches
+        and role_pattern.search(role_text) is not None
     )
 
 
@@ -128,12 +144,9 @@ def company_similarity(a: str | None, b: str | None) -> float:
 def find_fuzzy_duplicate(
     company: str | None, known_companies: list[str], threshold: float = FUZZY_DEDUP_THRESHOLD
 ) -> str | None:
-    """Return the first known company name that's a near-duplicate of `company`.
+    """First known company name that's a near-duplicate of `company`, if any.
 
-    Catches variants plain key-normalization misses, e.g. "Acme Inc." vs
-    "Acme, Inc" vs "ACME Pte Ltd" — common noise in LLM-extracted company
-    names that would otherwise slip past exact-key dedup and generate a
-    duplicate outreach draft.
+    Catches variants exact-key dedup misses, e.g. "Acme Inc." vs "ACME Pte Ltd".
     """
     best_match: str | None = None
     best_score = threshold

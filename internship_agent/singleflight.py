@@ -1,11 +1,8 @@
 """Single-flight call coalescing: at most one in-flight computation per key.
 
-Dispatching a batch of opportunities to a thread pool means two workers can
-land on the same cache key (e.g. two roles at the same company) before either
-has written a result back — both miss the cache and both do the same
-Tavily+Gemini domain lookup. This makes concurrent callers for the same key
-queue behind whichever one gets there first, so the work — and the API
-calls it costs — only happens once per key per batch.
+Serializes concurrent callers for the same key so only the first actually
+runs the work; the rest wait and hit the now-populated cache instead of
+racing it. See contacts.py's domain-lookup cache for why this exists.
 """
 from __future__ import annotations
 

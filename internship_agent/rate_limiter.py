@@ -1,14 +1,6 @@
-"""Thread-safe token-bucket rate limiter.
+"""Thread-safe token-bucket rate limiter, shared across worker threads.
 
-The original agent throttled external API calls with blind `time.sleep(2)` /
-`time.sleep(13)` calls between requests, which caps throughput at whatever the
-sleep happened to be regardless of how many workers are calling concurrently.
-A token bucket lets many threads share one rate ceiling correctly: each caller
-blocks only long enough to earn its own token, so a burst of idle capacity can
-be spent immediately while sustained load is still capped at `rate` per second.
-
-The clock and sleep functions are injectable so unit tests can fast-forward
-through the wait instead of actually sleeping.
+Clock/sleep are injectable so tests can fast-forward instead of sleeping.
 """
 from __future__ import annotations
 

@@ -1,10 +1,8 @@
 """Tavily search/extract wrapper: retry-with-backoff plus a circuit breaker.
 
-The breaker check has to sit *outside* the retried call, not inside it: if
-`before_call()` raised from within the retried function, the retry decorator
-would treat `CircuitOpenError` as just another retryable exception and burn a
-full backoff sleep before giving up — retrying against a circuit that just
-told you not to defeats the point of failing fast.
+Breaker check sits outside the retried call — inside it, a retry decorator
+would treat CircuitOpenError as just another retryable exception and burn a
+full backoff sleep before giving up, defeating the point of failing fast.
 """
 from __future__ import annotations
 

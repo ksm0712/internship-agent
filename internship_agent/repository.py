@@ -161,6 +161,8 @@ class Repository:
         data["gemini_api_key"] = self._secrets.decrypt(data.pop("gemini_api_key_enc"))
         data["tavily_api_key"] = self._secrets.decrypt(data.pop("tavily_api_key_enc"))
         data["hunter_api_key"] = self._secrets.decrypt(data.pop("hunter_api_key_enc"))
+        data["search_locations"] = json.loads(data["search_locations"] or "[]")
+        data["search_roles"] = json.loads(data["search_roles"] or "[]")
         return data
 
     @staticmethod
@@ -177,6 +179,16 @@ class Repository:
             cur.execute(
                 "UPDATE users SET resume_path = ?, updated_at = ? WHERE email = ?",
                 (resume_path, _now(), email),
+            )
+
+    def save_search_prefs(
+        self, email: str, user_key: str, *, locations: list[str], roles: list[str]
+    ) -> None:
+        with self.db.cursor() as cur:
+            self._ensure_user(cur, email, user_key)
+            cur.execute(
+                "UPDATE users SET search_locations = ?, search_roles = ?, updated_at = ? WHERE email = ?",
+                (json.dumps(locations), json.dumps(roles), _now(), email),
             )
 
     def save_api_keys(
@@ -246,8 +258,8 @@ class Repository:
                 INSERT INTO drafts
                     (user_email, company, company_key, role, recipient_name, to_email,
                      subject, body, status, resume_path, source_url, contact_source,
-                     gmail_message_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     gmail_message_id, fit_score, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_email,
@@ -263,12 +275,56 @@ class Repository:
                     draft.get("source_url"),
                     draft.get("contact_source"),
                     draft.get("gmail_message_id"),
+                    draft.get("fit_score"),
                     _now(),
                     _now(),
                 ),
             )
             assert cur.lastrowid is not None
             return cur.lastrowid
+
+    def training_examples(self, user_email: str) -> list[dict[str, Any]]:
+        """Past drafts with a decided outcome, joined with the opportunity/
+        contact fields `ranking.extract_features` needs.
+
+        One query per draft rather than a single join: role_key normalization
+        happens in Python (text_utils.role_key), not SQL, and a user's total
+        draft history is small enough (tens to low hundreds) that this is
+        simpler and fine.
+        """
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT role, company_key, status FROM drafts "
+                "WHERE user_email = ? AND status IN ('sent', 'skipped', 'removed')",
+                (user_email,),
+            )
+            decided = _rows(cur.fetchall())
+
+        examples = []
+        for row in decided:
+            # get_contact() re-derives company_key from a company *name* via
+            # make_company_key, which is idempotent — passing an already-
+            # normalized key through it again is a no-op, so this is safe.
+            contact = self.get_contact(row["company_key"], row["role"])
+            opp = self._opportunity_by_key(row["company_key"], row["role"])
+            examples.append(
+                {
+                    "role": row["role"],
+                    "description": (opp or {}).get("description") or "",
+                    "confidence": (opp or {}).get("confidence"),
+                    "contact_source": (contact or {}).get("contact_source") or "",
+                    "label": 1 if row["status"] == "sent" else 0,
+                }
+            )
+        return examples
+
+    def _opportunity_by_key(self, company_key: str, role: str) -> dict[str, Any] | None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM opportunities WHERE company_key = ? AND role_key = ?",
+                (company_key, make_role_key(role)),
+            )
+            return _row(cur.fetchone())
 
     def list_drafts(
         self, user_email: str, *, exclude_removed: bool = True

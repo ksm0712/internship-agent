@@ -1,11 +1,6 @@
-"""Encryption for BYO API keys at rest.
+"""Encryption for BYO API keys and the Gmail OAuth token at rest.
 
-The BYO-key model means real, usable Gemini/Tavily/Hunter keys live on this
-server for as long as a user is signed in. The previous version stored them as
-plaintext JSON (`data/web_state.json`), so anyone who could read the data
-directory could read every signed-in user's keys. This wraps each key with
-Fernet (AES-128-CBC + HMAC-SHA256) before it touches disk, keyed off
-`INTERNSHIP_AGENT_SECRET_KEY`.
+Fernet (AES-128-CBC + HMAC-SHA256), keyed off INTERNSHIP_AGENT_SECRET_KEY.
 """
 from __future__ import annotations
 

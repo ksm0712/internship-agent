@@ -1,11 +1,4 @@
-"""Retry-with-backoff and a small circuit breaker for flaky external APIs.
-
-Every external call in this app (Tavily, Gemini, Hunter.io, Gmail) can fail
-transiently — rate limits, timeouts, brief outages. `retry_with_backoff` retries
-those with exponential backoff and jitter; an optional `CircuitBreaker` stops
-hammering a dependency that is down hard, so one bad domain doesn't burn the
-whole retry budget of a batch run.
-"""
+"""Retry-with-backoff and a circuit breaker for flaky external APIs."""
 from __future__ import annotations
 
 import functools

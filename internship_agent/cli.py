@@ -1,8 +1,7 @@
 """Command-line entry point: `python -m internship_agent <command>`.
 
-Mirrors the original `internship_agent.py` CLI. The CLI has no concept of
-multiple signed-in users, so it scopes its drafts/history under a single
-fixed user key (`CLI_USER_EMAIL`) in the same database the web app uses.
+No concept of multiple users, so drafts/history are scoped under one fixed
+key (`CLI_USER_EMAIL`) in the same database the web app uses.
 """
 from __future__ import annotations
 
@@ -79,6 +78,8 @@ def main() -> None:
 
     search_p = sub.add_parser("search", help="Find current internship opportunities.")
     search_p.add_argument("--limit", type=int, default=25)
+    search_p.add_argument("--locations", default="", help="Comma-separated locations, e.g. 'Singapore,Remote'")
+    search_p.add_argument("--roles", default="", help="Comma-separated role keywords, e.g. 'machine learning,backend'")
 
     contacts_p = sub.add_parser("contacts", help="Find recipient emails for saved opportunities.")
     contacts_p.add_argument("--limit", type=int, default=100)
@@ -95,6 +96,8 @@ def main() -> None:
     run_p = sub.add_parser("run", help="Run search, contact lookup, draft, then approval-to-send.")
     run_p.add_argument("--resume", type=Path)
     run_p.add_argument("--limit", type=int, default=15)
+    run_p.add_argument("--locations", default="")
+    run_p.add_argument("--roles", default="")
 
     sub.add_parser("stats", help="Print aggregate pipeline metrics.")
 
@@ -106,7 +109,9 @@ def main() -> None:
     try:
         if args.command == "search":
             config = load_config()
-            found = search_internships(args.limit, config, repo)
+            locations = [loc.strip() for loc in args.locations.split(",") if loc.strip()]
+            roles = [role.strip() for role in args.roles.split(",") if role.strip()]
+            found = search_internships(args.limit, config, repo, locations=locations, roles=roles)
             print(f"Found {len(found)} new opportunities ({repo.count_opportunities()} total saved).")
         elif args.command == "contacts":
             config = load_config()
@@ -126,7 +131,9 @@ def main() -> None:
         elif args.command == "run":
             config = load_config()
             resume = prompt_for_resume(args.resume)
-            search_internships(args.limit, config, repo)
+            locations = [loc.strip() for loc in args.locations.split(",") if loc.strip()]
+            roles = [role.strip() for role in args.roles.split(",") if role.strip()]
+            search_internships(args.limit, config, repo, locations=locations, roles=roles)
             contacts = find_contacts(repo.list_opportunities(), config, repo)
             draft_emails(resume, contacts, args.limit, config, repo, CLI_USER_EMAIL)
             review_and_send(repo, DEFAULT_CREDENTIALS_FILE, DEFAULT_TOKEN_FILE)

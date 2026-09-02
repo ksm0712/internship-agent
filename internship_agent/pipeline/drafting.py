@@ -1,10 +1,10 @@
 """Stage 3: draft a personalized outreach email per contact.
 
-Drafting is parallelized across a small thread pool since each Gemini call is
-independent per contact. Each draft is written to the database as soon as
-it's produced (rather than batched at the end), matching the original agent's
-incremental-save behavior so a failure partway through a batch doesn't lose
-the drafts that already succeeded.
+Candidates are ranked by predicted fit (ranking.LeadRanker) before drafting,
+so the queue fills with the best matches first instead of arbitrary order —
+see ranking.py for the model. Parallelized across a small thread pool. Each
+draft is written to the database as it's produced, so a failure partway
+through a batch doesn't lose the drafts that already succeeded.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from typing import Any
 from internship_agent.clients.gemini_client import GeminiClient
 from internship_agent.config import Config
 from internship_agent.metrics import StageTimer, new_run_id
+from internship_agent.ranking import LeadRanker
 from internship_agent.repository import Repository
 from internship_agent.resume import fallback_draft, read_resume
 from internship_agent.text_utils import company_key
@@ -80,23 +81,24 @@ def draft_emails(
     resume_text = read_resume(resume_file)
 
     already_drafted = repo.existing_draft_company_keys(user_email)
-    candidates = [
-        contact
-        for contact in contacts[:limit]
-        if company_key(contact.get("company")) not in already_drafted
+    eligible = [
+        contact for contact in contacts if company_key(contact.get("company")) not in already_drafted
     ]
 
+    ranker = LeadRanker(repo.training_examples(user_email), resume_text)
+    ranked = ranker.rank(eligible)[:limit]
+
     with StageTimer(repo.db, run_id=run_id, stage="draft", user_email=user_email) as timer:
-        timer.items_in = len(candidates)
+        timer.items_in = len(ranked)
         created: list[dict[str, Any]] = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {
-                pool.submit(_draft_one, gemini, contact, resume_text, resume_file): contact
-                for contact in candidates
+                pool.submit(_draft_one, gemini, contact, resume_text, resume_file): (contact, result)
+                for contact, result in ranked
             }
             for future in as_completed(futures):
-                contact = futures[future]
+                contact, rank_result = futures[future]
                 try:
                     draft_text, used_fallback = future.result()
                     timer.api_calls += 1
@@ -113,6 +115,7 @@ def draft_emails(
                         "resume_path": str(resume_file),
                         "subject": draft_text["subject"],
                         "body": draft_text["body"],
+                        "fit_score": round(rank_result.score, 4),
                     }
                     draft_id = repo.add_draft(user_email, draft)
                     created.append({**draft, "id": draft_id})

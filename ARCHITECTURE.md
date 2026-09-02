@@ -2,56 +2,45 @@
 
 ## Pipeline
 
-Three stages, each an independent function in `internship_agent/pipeline/`, sharing one SQLite database through `internship_agent/repository.py`. The web app and the CLI are both thin callers of the same pipeline — neither has its own copy of the logic.
+Three stages in `internship_agent/pipeline/`, sharing one SQLite database through `repository.py`. Both `web_app.py` and `cli.py` call the same pipeline functions — no duplicated logic between the two entry points.
 
 ```mermaid
 flowchart LR
     subgraph Callers
-        WebApp["web_app.py<br/>(Flask routes)"]
-        CLI["internship_agent/cli.py"]
+        WebApp["web_app.py"]
+        CLI["cli.py"]
     end
 
     subgraph Pipeline
-        Search["pipeline/search.py<br/>Tavily search + extract → Gemini extraction"]
-        Contacts["pipeline/contacts.py<br/>domain lookup → Hunter.io"]
-        Draft["pipeline/drafting.py<br/>Gemini draft (or offline fallback)"]
+        Search["search.py<br/>Tavily search + extract → Gemini"]
+        Contacts["contacts.py<br/>domain lookup → Hunter.io"]
+        Draft["drafting.py<br/>Gemini draft, offline fallback"]
     end
 
-    subgraph "Cross-cutting (internship_agent/)"
-        Retry["retry.py<br/>backoff + circuit breaker"]
-        RateLimit["rate_limiter.py<br/>token bucket"]
-        Cache["cache.py + singleflight.py<br/>TTL cache, coalesced"]
-        Metrics["metrics.py<br/>StageTimer → run_metrics"]
+    subgraph "internship_agent/"
+        Retry["retry.py"]
+        RateLimit["rate_limiter.py"]
+        Cache["cache.py + singleflight.py"]
+        Metrics["metrics.py"]
     end
 
-    DB[("SQLite<br/>repository.py")]
+    DB[("SQLite")]
 
-    WebApp --> Search
-    WebApp --> Contacts
-    WebApp --> Draft
-    CLI --> Search
-    CLI --> Contacts
-    CLI --> Draft
-
-    Search --> DB
-    Contacts --> DB
-    Draft --> DB
-    Search -. wraps calls .-> Retry
-    Contacts -. wraps calls .-> Retry
-    Draft -. wraps calls .-> Retry
+    WebApp --> Search & Contacts & Draft
+    CLI --> Search & Contacts & Draft
+    Search & Contacts & Draft --> DB
+    Search & Contacts & Draft -.-> Retry
     Contacts --> RateLimit
     Contacts --> Cache
-    Search -.records.-> Metrics
-    Contacts -.records.-> Metrics
-    Draft -.records.-> Metrics
+    Search & Contacts & Draft -.-> Metrics
     Metrics --> DB
 ```
 
-Each stage runs its own bounded `ThreadPoolExecutor` over the items it's processing (URL batches for extraction, companies for contact resolution, contacts for drafting) instead of the original sequential loop. See [Concurrency](#concurrency) for why that's safe.
+Each stage runs its own bounded `ThreadPoolExecutor` (URL batches for extraction, companies for contact resolution, contacts for drafting), instead of the original's sequential loop.
 
 ## Storage
 
-SQLite in WAL mode, not a flat JSON file per collection. The earlier version rewrote an entire JSON file (`data/internships.json`, `data/contacts.json`, one `data/drafts_<user>.json` and `data/history/<user>.json` per user) on every single mutation — no indexing, no partial writes, and a search re-run silently *replaced* the whole leads list instead of accumulating it.
+SQLite, WAL mode. Previously each collection was its own JSON file (`internships.json`, `contacts.json`, one `drafts_<user>.json` / `history/<user>.json` per user), rewritten wholesale on every mutation — no indexes, and a search re-run replaced the whole leads list instead of accumulating it.
 
 ```mermaid
 erDiagram
@@ -76,6 +65,8 @@ erDiagram
         blob tavily_api_key_enc
         blob hunter_api_key_enc
         blob gmail_oauth_token_enc
+        text search_locations
+        text search_roles
     }
     drafts {
         int id PK
@@ -110,51 +101,67 @@ erDiagram
     opportunities ||--o| contacts : "company_key + role"
 ```
 
-`opportunities` and `contacts` are unique on `(company_key, role_key)` / `(company_key, role)` and inserted with `INSERT ... ON CONFLICT DO NOTHING` / `DO UPDATE`, so leads accumulate across runs instead of being replaced, and re-running search or contact resolution is idempotent. Drafts are addressed by database id rather than list position — the old `index`-based addressing from the JSON-array days was one stale response away from acting on the wrong draft.
+`opportunities`/`contacts` are unique on `(company_key, role_key)` / `(company_key, role)`, inserted with `ON CONFLICT DO NOTHING` / `DO UPDATE` — leads accumulate across runs and re-running a stage is idempotent. Drafts are addressed by row id, not list position.
 
-`internship_agent/db.py` gives each thread its own connection to the same file (SQLite connections aren't safe to share across threads); WAL mode lets those connections read concurrently and serializes writers without blocking readers, which matters once contact resolution and drafting are running on thread pools.
+`db.py` gives each thread its own connection (SQLite connections aren't shared across threads); WAL lets those connections read concurrently without blocking writers.
 
 ## Concurrency
 
-`pipeline/contacts.py` and `pipeline/drafting.py` submit their per-item work to a `ThreadPoolExecutor`. This is safe because:
+`contacts.py` and `drafting.py` submit per-item work to a thread pool. Notes from getting this right:
 
-- **Storage** — every worker gets its own SQLite connection (see above); there's no shared cursor or connection object to race on.
-- **Cache counters** — `cache.py`'s hit/miss counters are incremented under a `threading.Lock`, not bare `+=`, which isn't atomic across threads in CPython.
-- **Cache reads/writes** — this one *wasn't* safe on the first pass. Dispatching a batch to the pool means two workers can land on the same cache key (e.g. two roles at the same company) before either has written a result back: both miss the cache and both pay for the same Tavily + Gemini domain lookup. A concurrency test (`tests/integration/test_contacts_pipeline.py::test_domain_lookup_is_cached_across_roles_at_the_same_company`) caught this by asserting call counts, not just correctness of the returned data. The fix is `singleflight.py`: concurrent callers for the same key queue behind whichever one gets there first, so the work only happens once per key per batch.
-- **Metrics** — worker threads return their own call/cache/error counts rather than mutating a shared `StageTimer` from multiple threads; the results are aggregated in the main thread as futures complete (`as_completed` naturally runs in the calling thread), which sidesteps the same non-atomic-increment problem without needing a lock in the hot path.
+- Cache hit/miss counters (`cache.py`) are incremented under a lock — bare `+=` on a shared counter isn't atomic across threads in CPython.
+- Domain-lookup caching wasn't safe on the first pass: two workers resolving different roles at the same company can both miss the cache before either writes back, so both pay for the same Tavily + Gemini call. `tests/integration/test_contacts_pipeline.py::test_domain_lookup_is_cached_across_roles_at_the_same_company` catches this by asserting call counts, not just correctness. Fix is `singleflight.py` — concurrent callers for the same key queue behind whichever one gets there first.
+- `StageTimer` counters aren't touched from worker threads directly. Each worker returns its own call/cache/error counts; the main thread aggregates them as futures complete (`as_completed` runs in the calling thread), which avoids needing a lock in the hot path.
 
-`benchmarks/bench_concurrency.py` measures the resulting speedup against fake clients with a fixed simulated per-call latency, so the number is reproducible without live API rate limits or keys:
+`benchmarks/bench_concurrency.py` measures the thread-pool effect against fake clients with a fixed simulated per-call latency (reproducible without live keys or rate limits):
 
-```text
-companies: 20, simulated latency: 0.30s/call
-sequential (1 worker):    18.26s
-concurrent (5 workers):    3.66s
-speedup:                   4.99x
+```
+20 companies, 0.3s/call simulated latency
+sequential (1 worker):   18.26s
+concurrent (5 workers):   3.66s
+speedup:                  4.99x
 ```
 
-(Real speedup on live APIs will be lower than the ~5x here, since 5 workers hitting a real rate-limited API will spend some of that concurrency waiting on `rate_limiter.py` instead of the network — this benchmark isolates the thread-pool effect specifically.)
+Real speedup on live APIs will be lower — 5 workers against a rate-limited API spend some of that concurrency waiting on `rate_limiter.py` rather than the network. This benchmark isolates the thread-pool effect specifically.
 
 ## Resilience
 
-Every external call (Tavily, Gemini, Hunter.io, Gmail) goes through `retry_with_backoff` (exponential backoff with jitter, bounded attempts) and an optional `CircuitBreaker`. One detail that took a rewrite to get right: the breaker check has to sit *outside* the retried function, not inside it. The first version checked `breaker.before_call()` inside the `@retry_with_backoff`-wrapped method, so once the breaker opened, `CircuitOpenError` was itself treated as a retryable exception — retrying against a circuit that just said "stop calling this" for a full backoff cycle before finally giving up. `tests/unit/test_clients.py` asserts the underlying client is called exactly `failure_threshold` times, not more, which is what caught it.
+Every external call (Tavily, Gemini, Hunter.io, Gmail) goes through `retry_with_backoff` plus an optional `CircuitBreaker`. The breaker check sits outside the retried function, not inside it — an earlier version checked `before_call()` inside the retry-wrapped method, so once the breaker opened, `CircuitOpenError` itself got retried for a full backoff cycle before giving up. `tests/unit/test_clients.py` asserts the underlying client is called exactly `failure_threshold` times, not more.
 
-Hunter.io calls additionally share a `TokenBucketRateLimiter` (`rate_limiter.py`) across all worker threads, since Hunter's free tier rate limit is per-account, not per-thread — uncoordinated concurrent workers would just turn concurrency into a wall of 429s.
+Hunter.io calls share a `TokenBucketRateLimiter` across worker threads — Hunter's rate limit is per-account, not per-thread.
 
 ## Observability
 
-`metrics.py`'s `StageTimer` wraps each pipeline stage execution and records start/end time, item counts, API call count, cache hits, and errors to `run_metrics`. `aggregate_stats()` rolls that up into per-stage p50/p95 latency, cache hit rate, and error rate, exposed at `GET /api/stats` and the in-app Stats page. Previously the only signal available was `print()` output scrolling by in a terminal.
+`StageTimer` wraps each stage execution and records timing, item counts, API calls, cache hits, and errors to `run_metrics`. `aggregate_stats()` rolls that into per-stage p50/p95 latency, cache hit rate, and error rate — exposed at `GET /api/stats` and the Stats page. Previously the only signal was stdout.
 
 ## Security
 
-- **API keys and the Gmail OAuth token are encrypted at rest** (`crypto.py`, Fernet / AES-128-CBC + HMAC-SHA256), keyed off `INTERNSHIP_AGENT_SECRET_KEY`. The BYO-key model means real, usable API keys for every signed-in user live on this server for as long as they're signed in; the previous version stored them as plaintext JSON.
-- **Gmail OAuth token is now scoped per user.** It used to live in one shared `data/web_google_token.json` for *every* signed-in user — a second Google account signing in on the same server would overwrite the first account's send credentials, and a pending "approve and send" from the first user would then send through the second user's Gmail. `users.gmail_oauth_token_enc` fixes that.
-- SQL is fully parameterized (no string-built queries) — see `repository.py`.
+- BYO API keys and the Gmail OAuth token are encrypted at rest (`crypto.py`, Fernet), keyed off `INTERNSHIP_AGENT_SECRET_KEY`. They were plaintext JSON before.
+- Gmail OAuth token is scoped per user (`users.gmail_oauth_token_enc`). It used to live in one shared file for every signed-in user — a second Google account signing in would overwrite the first account's send credentials.
+- SQL is parameterized throughout, no string-built queries.
 
-## Known limitations / follow-ups
+## Search scope
 
-Being direct about what this is and isn't:
+`pipeline/search.py` builds queries from user-supplied locations and roles (`_build_queries`), capped at `MAX_SEARCH_QUERIES` regardless of how many are selected. Empty locations/roles fall back to "any location" / a small set of default tech-role terms — no filtering, not "Singapore only" as in the original.
 
-- SQLite is the right choice for a single-host app like this one, not for a service that needs to scale writes across multiple hosts — that would mean Postgres and a connection pool, not a bigger version of this design.
-- The pipeline runs synchronously inside the Flask request/response cycle (parallel *within* a stage, but the HTTP request still blocks until the stage finishes). A production version handling longer-running or higher-volume runs would move this to a background task queue (Celery/RQ + Redis) with a job-status endpoint the UI polls, instead of holding the connection open.
-- `google-generativeai` is EOL upstream in favor of `google-genai`; not migrated in this pass since it's an unrelated SDK swap, not a systems change — tracked here rather than silently left for someone to discover.
-- No structured request tracing (e.g. OpenTelemetry) — `run_metrics` covers pipeline-stage timing, not per-HTTP-request tracing.
+## Lead ranking
+
+`ranking.py`. Before drafting, candidates are scored and sorted so the batch fills with the best matches first, instead of arbitrary order:
+
+- **Features** (`extract_features`): TF-IDF cosine similarity between the resume and the role/description text, a contact-quality signal (a real Hunter.io contact beats a guessed `careers@` address), and the extraction confidence Gemini reported for the listing.
+- **Cold start**: with no history, `LeadRanker` scores candidates with a hand-weighted sum of those same features (weighted toward text similarity) — no model needed yet.
+- **Learned**: once a user has at least `MIN_TRAINING_EXAMPLES` decided drafts (sent/skipped/removed) with at least a few examples of each outcome, it trains a logistic regression on that history instead, mapping features to "did I actually send this one." Retrains from scratch on every call — the training set is one user's own history (tens to low hundreds of rows at most), so retraining is cheap and there's no persisted model to go stale.
+- **Evaluation** (`benchmarks/eval_ranker.py`): since a real user's history doesn't exist until they've used the app, this evaluates the same feature/model code on a synthetic labeled set — 15 backend/ML-leaning role templates labeled positive, 15 sales/marketing-leaning templates labeled negative, against a backend-leaning resume, with contact-quality/confidence randomized independent of label so the eval actually stresses the text-similarity feature rather than being trivially solved by one field. Train/test split, scored by ROC-AUC (0.5 = random, 1.0 = perfect separation):
+
+  ```
+  training examples: 60, held-out: 60
+  ROC-AUC: 0.784
+  ```
+
+## Limitations
+
+- SQLite fits a single-host app. A service that needs to scale writes across multiple hosts needs Postgres and a connection pool — not a bigger version of this.
+- The pipeline runs inside the Flask request/response cycle — parallel within a stage, but the HTTP request blocks until the stage finishes. Longer-running or higher-volume use would move this to a background queue (Celery/RQ + Redis) with a job-status endpoint the UI polls.
+- `google-generativeai` is EOL upstream in favor of `google-genai`; not migrated here since it's an unrelated SDK swap.
+- No per-request tracing (OpenTelemetry) — `run_metrics` covers pipeline-stage timing, not HTTP-level tracing.
+- TF-IDF cosine similarity has no semantic understanding — "backend" and "server-side" score as unrelated. Sentence embeddings would generalize better; TF-IDF was chosen to keep ranking fully local (no extra API calls/cost per candidate scored). The 3-feature logistic regression is deliberately simple, not under-built: a per-user training set of tens to low hundreds of examples can't support a much larger model without overfitting.

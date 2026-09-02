@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Internship Agent</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700;750&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
@@ -12,7 +15,6 @@
       <main class="login-page">
         <section class="login-panel">
           <div class="brand-lockup">
-            <div class="brand-mark">IA</div>
             <span>Internship Agent</span>
           </div>
           <h1>Approve every outreach email before it leaves Gmail.</h1>
@@ -24,7 +26,6 @@
     {% else %}
       <header class="app-header">
         <a class="brand-lockup" href="{{ url_for('index') }}">
-          <div class="brand-mark">IA</div>
           <span>Internship Agent</span>
         </a>
         <nav class="top-nav">
@@ -106,6 +107,29 @@
 
             <section class="panel-block">
               <div class="block-head">
+                <h2>Search preferences</h2>
+              </div>
+              <div class="tag-field">
+                <label for="location-input">Locations</label>
+                <div class="tag-input-wrap">
+                  <div class="tag-list" id="location-tags"></div>
+                  <input type="text" id="location-input" autocomplete="off" placeholder="City or country, e.g. Singapore">
+                  <div class="tag-suggestions" id="location-suggestions" hidden></div>
+                </div>
+                <span class="tag-field-hint">Leave empty to search anywhere.</span>
+              </div>
+              <div class="tag-field">
+                <label for="role-input">Roles</label>
+                <div class="tag-input-wrap">
+                  <div class="tag-list" id="role-tags"></div>
+                  <input type="text" id="role-input" autocomplete="off" placeholder="e.g. machine learning, backend">
+                </div>
+                <span class="tag-field-hint">Press Enter or comma to add. Leave empty for any tech role.</span>
+              </div>
+            </section>
+
+            <section class="panel-block">
+              <div class="block-head">
                 <h2>Drafting</h2>
               </div>
               <div class="draft-controls">
@@ -168,7 +192,10 @@
       window.initialSignedIn = {{ "true" if signed_in else "false" }};
       window.hasResume = {{ "true" if resume_path else "false" }};
       window.keyStatus = {{ api_key_status|tojson if signed_in else "{}" }};
+      window.savedLocations = {{ saved_locations|tojson if signed_in else "[]" }};
+      window.savedRoles = {{ saved_roles|tojson if signed_in else "[]" }};
     </script>
+    <script src="{{ url_for('static', filename='locations.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>
 </html>

@@ -192,3 +192,57 @@ class TestCompanyHistory:
     def test_history_scoped_per_user(self, repo):
         repo.remember_company("a@example.com", {"company": "Acme"}, "drafted")
         assert repo.history("b@example.com") == []
+
+
+class TestTrainingExamples:
+    def _draft(self, **overrides):
+        base = {
+            "company": "Acme",
+            "role": "Backend Intern",
+            "to": "hr@acme.com",
+            "subject": "s",
+            "body": "b",
+            "status": "sent",
+        }
+        base.update(overrides)
+        return base
+
+    def test_only_includes_decided_drafts(self, repo):
+        repo.add_draft("a@example.com", self._draft(status="sent"))
+        repo.add_draft("a@example.com", self._draft(company="Globex", status="pending_approval"))
+        repo.add_draft("a@example.com", self._draft(company="Initech", status="needs_contact"))
+        examples = repo.training_examples("a@example.com")
+        assert len(examples) == 1
+
+    def test_sent_maps_to_positive_label(self, repo):
+        repo.add_draft("a@example.com", self._draft(status="sent"))
+        examples = repo.training_examples("a@example.com")
+        assert examples[0]["label"] == 1
+
+    def test_removed_and_skipped_map_to_negative_label(self, repo):
+        repo.add_draft("a@example.com", self._draft(status="removed"))
+        repo.add_draft("a@example.com", self._draft(company="Globex", status="skipped"))
+        examples = repo.training_examples("a@example.com")
+        assert all(ex["label"] == 0 for ex in examples)
+
+    def test_joins_opportunity_and_contact_fields(self, repo):
+        repo.upsert_opportunities(
+            [{"company": "Acme", "role": "Backend Intern", "description": "Build APIs", "confidence": 0.8}]
+        )
+        repo.upsert_contact({"company": "Acme", "role": "Backend Intern", "contact_source": "hunter.io"})
+        repo.add_draft("a@example.com", self._draft(status="sent"))
+
+        examples = repo.training_examples("a@example.com")
+        assert examples[0]["description"] == "Build APIs"
+        assert examples[0]["confidence"] == 0.8
+        assert examples[0]["contact_source"] == "hunter.io"
+
+    def test_missing_opportunity_or_contact_fills_in_defaults(self, repo):
+        repo.add_draft("a@example.com", self._draft(status="sent"))
+        examples = repo.training_examples("a@example.com")
+        assert examples[0]["description"] == ""
+        assert examples[0]["contact_source"] == ""
+
+    def test_scoped_per_user(self, repo):
+        repo.add_draft("a@example.com", self._draft(status="sent"))
+        assert repo.training_examples("b@example.com") == []
