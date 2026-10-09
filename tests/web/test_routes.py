@@ -55,6 +55,20 @@ class TestAuthGate:
         follow_up = signed_in_client.get("/api/drafts")
         assert follow_up.status_code == 500
 
+    def test_google_client_config_uses_env_credentials(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+        monkeypatch.setattr(web_app, "PUBLIC_BASE_URL", "https://internship-agent.example.com")
+
+        with web_app.app.test_request_context():
+            config = web_app.google_client_config()
+
+        assert config["web"]["client_id"] == "client-id"
+        assert config["web"]["client_secret"] == "client-secret"
+        assert config["web"]["redirect_uris"] == [
+            "https://internship-agent.example.com/oauth2callback"
+        ]
+
 
 class TestSettingsAndResume:
     def test_save_settings_updates_status_and_encrypts_at_rest(self, signed_in_client):

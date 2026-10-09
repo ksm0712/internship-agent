@@ -10,6 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
 from internship_agent import (
@@ -28,9 +29,11 @@ from internship_agent.pipeline.search import search_internships
 from internship_agent.repository import Repository
 from internship_agent.text_utils import company_key, valid_email
 
-os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+if os.getenv("PUBLIC_BASE_URL") is None:
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
 SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "local-dev-change-me")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -40,6 +43,9 @@ SCOPES = [
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+if PUBLIC_BASE_URL.startswith("https://"):
+    app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE="Lax")
 
 db = Database(DB_PATH)
 repo = Repository(db)
@@ -159,13 +165,45 @@ def load_web_credentials(email: str) -> Credentials | None:
     return creds if creds.valid else None
 
 
+def oauth_redirect_uri() -> str:
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}{url_for('oauth_callback')}"
+    return url_for("oauth_callback", _external=True)
+
+
+def google_client_config() -> dict[str, Any] | None:
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+    return {
+        "web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [oauth_redirect_uri()],
+        }
+    }
+
+
 def google_flow() -> Flow:
+    client_config = google_client_config()
+    if client_config:
+        return Flow.from_client_config(
+            client_config,
+            scopes=SCOPES,
+            redirect_uri=oauth_redirect_uri(),
+        )
     if not DEFAULT_CREDENTIALS_FILE.exists():
-        raise FileNotFoundError("Missing credentials.json. Run setup-gmail first.")
+        raise FileNotFoundError(
+            "Missing Google OAuth credentials. Set GOOGLE_CLIENT_ID and "
+            "GOOGLE_CLIENT_SECRET, or run setup-gmail locally."
+        )
     return Flow.from_client_secrets_file(
         str(DEFAULT_CREDENTIALS_FILE),
         scopes=SCOPES,
-        redirect_uri=url_for("oauth_callback", _external=True),
+        redirect_uri=oauth_redirect_uri(),
     )
 
 
@@ -512,4 +550,4 @@ def api_send(draft_id: int):
 
 if __name__ == "__main__":
     ensure_dirs()
-    app.run(host="127.0.0.1", port=5001, debug=True)
+    app.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "5001")), debug=True)
