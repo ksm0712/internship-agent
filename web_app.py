@@ -61,6 +61,38 @@ def resume_display_name(resume_path: str | None) -> str | None:
     return Path(resume_path).name.replace("_", " ")
 
 
+def user_resume_name(db_user: dict[str, Any] | None) -> str | None:
+    if not db_user:
+        return None
+    return db_user.get("resume_filename") or resume_display_name(db_user.get("resume_path"))
+
+
+def materialize_resume(email: str) -> Path | None:
+    """Return a local path for the signed-in user's resume.
+
+    Local dev keeps the uploaded file on disk. Hosted deployments may restart or
+    run on ephemeral filesystems, so the canonical copy is the encrypted app DB;
+    this helper recreates the attachment file when the path is missing.
+    """
+    db_user = repo.get_user(email) or {}
+    resume_path = db_user.get("resume_path")
+    if resume_path and Path(resume_path).exists():
+        return Path(resume_path)
+
+    stored = repo.get_resume_file(email)
+    if not stored:
+        return Path(resume_path) if resume_path else None
+
+    ensure_dirs()
+    user_upload_dir = UPLOAD_DIR / user_key()
+    user_upload_dir.mkdir(parents=True, exist_ok=True)
+    filename = secure_filename(stored["filename"]) or "resume.pdf"
+    path = user_upload_dir / filename
+    path.write_bytes(stored["content"])
+    repo.save_resume_path(email, user_key(), str(path))
+    return path
+
+
 def api_key_status() -> dict[str, bool]:
     email = current_user_email()
     if not email:
@@ -235,7 +267,7 @@ def index():
         signed_in=signed_in,
         user=user,
         resume_path=resume_path,
-        resume_name=resume_display_name(resume_path),
+        resume_name=user_resume_name(db_user),
         api_key_status=api_key_status(),
         internships_count=repo.count_opportunities(),
         contacts_count=repo.count_contacts(),
@@ -261,7 +293,7 @@ def history_page():
         signed_in=True,
         user=user,
         resume_path=resume_path,
-        resume_name=resume_display_name(resume_path),
+        resume_name=user_resume_name(db_user),
         api_key_status=api_key_status(),
         history=repo.history(current_user_email()),
     )
@@ -277,7 +309,7 @@ def stats_page():
         "stats.html",
         signed_in=True,
         user=user,
-        resume_name=resume_display_name(db_user.get("resume_path")),
+        resume_name=user_resume_name(db_user),
         api_key_status=api_key_status(),
         stats=aggregate_stats(db),
     )
@@ -330,10 +362,20 @@ def upload_resume():
         return jsonify({"ok": False, "error": "Upload a PDF, TXT, or MD resume."}), 400
 
     filename = secure_filename(file.filename)
-    path = UPLOAD_DIR / filename
-    file.save(path)
-    repo.save_resume_path(current_user_email(), user_key(), str(path))
-    return jsonify({"ok": True, "resume_path": str(path)})
+    user_upload_dir = UPLOAD_DIR / user_key()
+    user_upload_dir.mkdir(parents=True, exist_ok=True)
+    path = user_upload_dir / filename
+    content = file.read()
+    path.write_bytes(content)
+    repo.save_resume_file(
+        current_user_email(),
+        user_key(),
+        filename=filename,
+        content_type=file.mimetype or "application/octet-stream",
+        content=content,
+        resume_path=str(path),
+    )
+    return jsonify({"ok": True, "resume_path": str(path), "resume_name": filename.replace("_", " ")})
 
 
 @app.post("/api/settings")
@@ -383,8 +425,7 @@ def api_draft():
     require_signed_in()
     config = user_config(require_draft=True)
     email = current_user_email()
-    db_user = repo.get_user(email) or {}
-    resume_path = db_user.get("resume_path")
+    resume_path = materialize_resume(email)
     if not resume_path:
         return jsonify({"ok": False, "error": "Upload a resume first."}), 400
 
@@ -411,7 +452,7 @@ def api_draft():
             400,
         )
 
-    created = draft_emails(Path(resume_path), candidates, limit, config, repo, email)
+    created = draft_emails(resume_path, candidates, limit, config, repo, email)
     for draft in created:
         repo.remember_company(email, draft, "drafted")
     return jsonify({"ok": True, **queue_context()})
@@ -458,7 +499,11 @@ def api_send(draft_id: int):
     if draft.get("status") == "sent":
         return jsonify({"ok": True, "draft": draft})
 
-    sent = send_message(gmail_service(), draft["to"], draft["subject"], draft["body"], draft.get("resume_path"))
+    attachment_path = draft.get("resume_path")
+    if not attachment_path or not Path(attachment_path).exists():
+        materialized = materialize_resume(email)
+        attachment_path = str(materialized) if materialized else attachment_path
+    sent = send_message(gmail_service(), draft["to"], draft["subject"], draft["body"], attachment_path)
     updated = repo.update_draft_status(email, draft_id, "sent", gmail_message_id=sent.get("id"))
     assert updated is not None
     repo.remember_company(email, updated, "sent")

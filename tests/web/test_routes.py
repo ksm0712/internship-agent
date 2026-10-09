@@ -79,6 +79,7 @@ class TestSettingsAndResume:
         assert response.status_code == 200
         assert response.get_json()["ok"] is True
         assert web_app.repo.get_user("a@example.com")["resume_path"].endswith("resume.txt")
+        assert web_app.repo.get_resume_file("a@example.com")["content"] == b"Jane Doe resume text"
 
 
 class TestSearchRoute:

@@ -77,6 +77,25 @@ class TestUsersAndApiKeys:
         repo.save_resume_path("a@example.com", "a_example_com", "/uploads/resume.pdf")
         assert repo.get_user("a@example.com")["resume_path"] == "/uploads/resume.pdf"
 
+    def test_save_resume_file_roundtrip(self, repo):
+        repo.save_resume_file(
+            "a@example.com",
+            "a_example_com",
+            filename="resume.pdf",
+            content_type="application/pdf",
+            content=b"%PDF resume",
+            resume_path="/uploads/resume.pdf",
+        )
+        user = repo.get_user("a@example.com")
+        stored = repo.get_resume_file("a@example.com")
+        assert user["resume_path"] == "/uploads/resume.pdf"
+        assert user["resume_filename"] == "resume.pdf"
+        assert stored == {
+            "filename": "resume.pdf",
+            "content_type": "application/pdf",
+            "content": b"%PDF resume",
+        }
+
 
 class TestGmailToken:
     def test_roundtrip(self, repo):

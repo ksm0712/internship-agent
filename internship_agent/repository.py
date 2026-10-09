@@ -181,6 +181,46 @@ class Repository:
                 (resume_path, _now(), email),
             )
 
+    def save_resume_file(
+        self,
+        email: str,
+        user_key: str,
+        *,
+        filename: str,
+        content_type: str,
+        content: bytes,
+        resume_path: str | None = None,
+    ) -> None:
+        with self.db.cursor() as cur:
+            self._ensure_user(cur, email, user_key)
+            cur.execute(
+                """
+                UPDATE users
+                SET resume_path = ?,
+                    resume_filename = ?,
+                    resume_content_type = ?,
+                    resume_blob = ?,
+                    updated_at = ?
+                WHERE email = ?
+                """,
+                (resume_path, filename, content_type, content, _now(), email),
+            )
+
+    def get_resume_file(self, email: str) -> dict[str, Any] | None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT resume_filename, resume_content_type, resume_blob FROM users WHERE email = ?",
+                (email,),
+            )
+            row = cur.fetchone()
+        if row is None or row["resume_blob"] is None:
+            return None
+        return {
+            "filename": row["resume_filename"] or "resume.pdf",
+            "content_type": row["resume_content_type"] or "application/pdf",
+            "content": bytes(row["resume_blob"]),
+        }
+
     def save_search_prefs(
         self, email: str, user_key: str, *, locations: list[str], roles: list[str]
     ) -> None:

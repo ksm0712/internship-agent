@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
     user_key TEXT NOT NULL,
     resume_path TEXT,
+    resume_filename TEXT,
+    resume_content_type TEXT,
+    resume_blob BLOB,
     gemini_api_key_enc BLOB,
     tavily_api_key_enc BLOB,
     hunter_api_key_enc BLOB,
@@ -169,6 +172,9 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
     user_key TEXT NOT NULL,
     resume_path TEXT,
+    resume_filename TEXT,
+    resume_content_type TEXT,
+    resume_blob BYTEA,
     gemini_api_key_enc BYTEA,
     tavily_api_key_enc BYTEA,
     hunter_api_key_enc BYTEA,
@@ -367,6 +373,9 @@ class Database:
             "users": [
                 ("search_locations", "TEXT"),
                 ("search_roles", "TEXT"),
+                ("resume_filename", "TEXT"),
+                ("resume_content_type", "TEXT"),
+                ("resume_blob", "BLOB"),
             ],
             "drafts": [
                 ("fit_score", "REAL"),
@@ -383,6 +392,9 @@ class Database:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS search_locations TEXT")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS search_roles TEXT")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_filename TEXT")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_content_type TEXT")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_blob BYTEA")
             cur.execute("ALTER TABLE drafts ADD COLUMN IF NOT EXISTS fit_score DOUBLE PRECISION")
 
     def connection(self) -> Any:
