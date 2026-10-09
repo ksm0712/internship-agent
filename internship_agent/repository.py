@@ -166,7 +166,7 @@ class Repository:
         return data
 
     @staticmethod
-    def _ensure_user(cur: sqlite3.Cursor, email: str, user_key: str) -> None:
+    def _ensure_user(cur: Any, email: str, user_key: str) -> None:
         cur.execute(
             "INSERT INTO users (email, user_key, created_at, updated_at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(email) DO NOTHING",

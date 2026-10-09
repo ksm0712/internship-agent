@@ -12,7 +12,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS opportunities (
@@ -411,7 +411,7 @@ class Database:
         raw_cur = conn.cursor()
         cur = PostgresCursor(raw_cur) if self.engine == "postgres" else raw_cur
         try:
-            yield cur
+            yield cast(CursorLike, cur)
             conn.commit()
         except Exception:
             conn.rollback()

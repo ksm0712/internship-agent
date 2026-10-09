@@ -43,7 +43,7 @@ SCOPES = [
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
 if PUBLIC_BASE_URL.startswith("https://"):
     app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE="Lax")
 
