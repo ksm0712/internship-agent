@@ -2,7 +2,7 @@
 
 ## Pipeline
 
-Three stages in `internship_agent/pipeline/`, sharing one SQLite database through `repository.py`. Both `web_app.py` and `cli.py` call the same pipeline functions — no duplicated logic between the two entry points.
+Three stages in `internship_agent/pipeline/`, sharing one repository-backed database through `repository.py`. Local development uses SQLite; hosted deployments can point `INTERNSHIP_AGENT_DATABASE_URL` at Postgres/Supabase without changing pipeline code. Both `web_app.py` and `cli.py` call the same pipeline functions — no duplicated logic between the two entry points.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
         Metrics["metrics.py"]
     end
 
-    DB[("SQLite")]
+    DB[("SQLite local<br/>Postgres hosted")]
 
     WebApp --> Search & Contacts & Draft
     CLI --> Search & Contacts & Draft
@@ -40,7 +40,7 @@ Each stage runs its own bounded `ThreadPoolExecutor` (URL batches for extraction
 
 ## Storage
 
-SQLite, WAL mode. Previously each collection was its own JSON file (`internships.json`, `contacts.json`, one `drafts_<user>.json` / `history/<user>.json` per user), rewritten wholesale on every mutation — no indexes, and a search re-run replaced the whole leads list instead of accumulating it.
+SQLite by default, WAL mode locally. Hosted deployments can use Postgres by setting `INTERNSHIP_AGENT_DATABASE_URL`; the database wrapper translates the repository's sqlite-style placeholders and keeps one connection per worker thread. Previously each collection was its own JSON file (`internships.json`, `contacts.json`, one `drafts_<user>.json` / `history/<user>.json` per user), rewritten wholesale on every mutation — no indexes, and a search re-run replaced the whole leads list instead of accumulating it.
 
 ```mermaid
 erDiagram
@@ -65,6 +65,8 @@ erDiagram
         blob tavily_api_key_enc
         blob hunter_api_key_enc
         blob gmail_oauth_token_enc
+        text resume_filename
+        blob resume_blob
         text search_locations
         text search_roles
     }
@@ -103,7 +105,7 @@ erDiagram
 
 `opportunities`/`contacts` are unique on `(company_key, role_key)` / `(company_key, role)`, inserted with `ON CONFLICT DO NOTHING` / `DO UPDATE` — leads accumulate across runs and re-running a stage is idempotent. Drafts are addressed by row id, not list position.
 
-`db.py` gives each thread its own connection (SQLite connections aren't shared across threads); WAL lets those connections read concurrently without blocking writers.
+`db.py` gives each thread its own connection. SQLite connections aren't shared across threads; WAL lets those local connections read concurrently without blocking writers. In hosted mode the same per-thread pattern uses psycopg connections against Postgres.
 
 ## Concurrency
 
@@ -138,6 +140,8 @@ Hunter.io calls share a `TokenBucketRateLimiter` across worker threads — Hunte
 
 - BYO API keys and the Gmail OAuth token are encrypted at rest (`crypto.py`, Fernet), keyed off `INTERNSHIP_AGENT_SECRET_KEY`. They were plaintext JSON before.
 - Gmail OAuth token is scoped per user (`users.gmail_oauth_token_enc`). It used to live in one shared file for every signed-in user — a second Google account signing in would overwrite the first account's send credentials.
+- Uploaded resumes are stored in `users.resume_blob` so hosted deployments do not lose them when an ephemeral filesystem restarts. The app materializes a local copy only when the drafting or Gmail attachment code needs a file path.
+- Production OAuth can be configured with `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `PUBLIC_BASE_URL`, while local development can still use `credentials.json`.
 - SQL is parameterized throughout, no string-built queries.
 
 ## Search scope
@@ -160,7 +164,7 @@ Hunter.io calls share a `TokenBucketRateLimiter` across worker threads — Hunte
 
 ## Limitations
 
-- SQLite fits a single-host app. A service that needs to scale writes across multiple hosts needs Postgres and a connection pool — not a bigger version of this.
+- Postgres support is enough for a real hosted single-app deployment, but the app still opens direct psycopg connections from the web process. Higher-volume usage should put PgBouncer/Supabase pooler in front of it and tune worker counts.
 - The pipeline runs inside the Flask request/response cycle — parallel within a stage, but the HTTP request blocks until the stage finishes. Longer-running or higher-volume use would move this to a background queue (Celery/RQ + Redis) with a job-status endpoint the UI polls.
 - `google-generativeai` is EOL upstream in favor of `google-genai`; not migrated here since it's an unrelated SDK swap.
 - No per-request tracing (OpenTelemetry) — `run_metrics` covers pipeline-stage timing, not HTTP-level tracing.
