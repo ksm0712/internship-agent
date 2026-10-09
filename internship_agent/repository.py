@@ -260,6 +260,7 @@ class Repository:
                      subject, body, status, resume_path, source_url, contact_source,
                      gmail_message_id, fit_score, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 (
                     user_email,
@@ -280,8 +281,9 @@ class Repository:
                     _now(),
                 ),
             )
-            assert cur.lastrowid is not None
-            return cur.lastrowid
+            row = cur.fetchone()
+            assert row is not None
+            return row["id"]
 
     def training_examples(self, user_email: str) -> list[dict[str, Any]]:
         """Past drafts with a decided outcome, joined with the opportunity/

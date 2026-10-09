@@ -37,6 +37,7 @@ pydantic_core==2.46.4
 pyparsing==3.3.2
 pypdf==6.4.1
 python-dotenv==1.2.2
+psycopg[binary]==3.3.2
 regex==2026.5.9
 requests==2.34.2
 scikit-learn==1.9.0
