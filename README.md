@@ -59,7 +59,7 @@ Drafting candidates get scored by fit before anything gets written: TF-IDF simil
 ## Stack
 
 - Python, Flask
-- SQLite — see [ARCHITECTURE.md](ARCHITECTURE.md)
+- SQLite locally, Postgres/Supabase in hosted mode — see [ARCHITECTURE.md](ARCHITECTURE.md)
 - scikit-learn for the lead-ranking model — see [ARCHITECTURE.md](ARCHITECTURE.md#lead-ranking)
 - Gemini API for extraction and drafting
 - Tavily for web search
@@ -102,6 +102,77 @@ Your OAuth client needs this redirect URI configured for local login to work:
 ```text
 http://127.0.0.1:5001/oauth2callback
 ```
+
+## Deploy for other users
+
+The app is now deployment-ready: local dev still works with SQLite, while a hosted app can use Supabase Postgres by setting `INTERNSHIP_AGENT_DATABASE_URL`. Uploaded resumes are stored in the app database and materialized back to a file only when the agent needs to parse or attach them, so a server restart does not lose every user's resume.
+
+The cheapest practical setup is:
+
+- Render free web service for the Flask app.
+- Supabase free Postgres for app data.
+- One Google OAuth web client owned by the project.
+- BYO Gemini/Tavily/Hunter keys entered by each signed-in user.
+
+### 1. Create Supabase
+
+Create a Supabase project, copy its Postgres connection string, and set it as:
+
+```text
+INTERNSHIP_AGENT_DATABASE_URL=postgresql://...
+```
+
+Use the pooler/transaction connection string if your host has trouble reaching the direct database URL. Add `sslmode=require` if the URL does not already include SSL settings.
+
+The app creates its own tables on first boot.
+
+### 2. Create Google OAuth for production
+
+In Google Cloud:
+
+1. Enable Gmail API.
+2. Configure the OAuth consent screen as `External`.
+3. Create an OAuth `Web application` client.
+4. Add the production redirect URI:
+
+```text
+https://YOUR-RENDER-SERVICE.onrender.com/oauth2callback
+```
+
+Copy the client values into Render:
+
+```text
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+PUBLIC_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com
+```
+
+`PUBLIC_BASE_URL` must be the exact deployed origin with no trailing slash.
+
+### 3. Deploy on Render
+
+This repo includes `render.yaml`, so you can create a Render Blueprint from the GitHub repo. Set these environment variables in Render:
+
+```text
+FLASK_SECRET_KEY=<random token>
+INTERNSHIP_AGENT_SECRET_KEY=<random token>
+INTERNSHIP_AGENT_DATABASE_URL=<Supabase Postgres URL>
+GOOGLE_CLIENT_ID=<Google OAuth web client id>
+GOOGLE_CLIENT_SECRET=<Google OAuth web client secret>
+PUBLIC_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com
+```
+
+Generate the two random tokens with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Do not rotate `INTERNSHIP_AGENT_SECRET_KEY` casually. It encrypts stored API keys and Gmail OAuth tokens; changing it means old encrypted values cannot be decrypted.
+
+### Production caveats
+
+Render's free tier may sleep when inactive, so the first request after idle time can be slow. Also, because this app uses Google's `gmail.send` scope, non-test users may see an unverified-app warning until the OAuth app is verified by Google.
 
 ### Docker
 
