@@ -319,6 +319,11 @@ def index():
     )
 
 
+@app.get("/healthz")
+def healthz():
+    return jsonify({"ok": True})
+
+
 @app.get("/history")
 def history_page():
     user = signed_in_user()

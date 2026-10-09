@@ -20,6 +20,11 @@ class TestErrorHandling:
 
 
 class TestIndexPage:
+    def test_health_check(self, client):
+        response = client.get("/healthz")
+        assert response.status_code == 200
+        assert response.get_json() == {"ok": True}
+
     def test_signed_out_shows_login(self, client):
         response = client.get("/")
         assert response.status_code == 200
