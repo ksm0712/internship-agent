@@ -458,7 +458,17 @@ def save_settings():
         hunter_api_key=request.form.get("hunter_api_key", "").strip() or None,
     )
     clear_current_db_user_cache()
-    return jsonify({"ok": True, "api_key_status": api_key_status()})
+    user = current_db_user() or {}
+    return jsonify(
+        {
+            "ok": True,
+            "api_key_status": {
+                "gemini": bool(user.get("gemini_api_key")),
+                "tavily": bool(user.get("tavily_api_key")),
+                "hunter": bool(user.get("hunter_api_key")),
+            },
+        }
+    )
 
 
 @app.post("/api/search")
