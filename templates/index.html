@@ -31,6 +31,21 @@
         </div>
       </section>
 
+      <section class="readiness-strip" aria-label="Setup status">
+        <div class="{{ 'ready' if api_key_status.gemini and api_key_status.tavily else '' }}">
+          <strong>Keys</strong>
+          <span>{{ "Search ready" if api_key_status.gemini and api_key_status.tavily else "Gemini + Tavily needed" }}</span>
+        </div>
+        <div class="{{ 'ready' if resume_path else '' }}">
+          <strong>Resume</strong>
+          <span>{{ resume_name or "Upload before drafting" }}</span>
+        </div>
+        <div class="{{ 'ready' if pending_count else '' }}">
+          <strong>Queue</strong>
+          <span>{{ pending_count }} pending approval{{ "" if pending_count == 1 else "s" }}</span>
+        </div>
+      </section>
+
       <section class="workspace">
         <aside class="control-panel">
           <section id="keys" class="panel-block">

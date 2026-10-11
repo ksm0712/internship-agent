@@ -187,20 +187,23 @@ function renderDraft(draft) {
         </div>
       </div>
 
-      <dl class="mail-meta">
-        <div>
-          <dt>To</dt>
-          <dd>${escapeHtml(draft.to || "No recipient found")}</dd>
-        </div>
-        <div>
-          <dt>Subject</dt>
-          <dd>${escapeHtml(draft.subject)}</dd>
-        </div>
-        <div>
-          <dt>Attachment</dt>
-          <dd>${escapeHtml(draft.resume_name || "Resume")}</dd>
-        </div>
-      </dl>
+      <div class="mail-meta">
+        <dl>
+          <div>
+            <dt>To</dt>
+            <dd>${escapeHtml(draft.to || "No recipient found")}</dd>
+          </div>
+          <div>
+            <dt>Subject</dt>
+            <dd>${escapeHtml(draft.subject)}</dd>
+          </div>
+          <div>
+            <dt>Attachment</dt>
+            <dd>${escapeHtml(draft.resume_name || "Resume")}</dd>
+          </div>
+        </dl>
+        <div class="draft-preview-label">Email preview</div>
+      </div>
 
       <pre>${escapeHtml(draft.body)}</pre>
 

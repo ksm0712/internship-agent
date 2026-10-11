@@ -12,20 +12,23 @@
     </div>
   </div>
 
-  <dl class="mail-meta">
-    <div>
-      <dt>To</dt>
-      <dd>{{ draft.to or "No recipient found" }}</dd>
-    </div>
-    <div>
-      <dt>Subject</dt>
-      <dd>{{ draft.subject }}</dd>
-    </div>
-    <div>
-      <dt>Attachment</dt>
-      <dd>{{ draft.resume_name or "Resume" }}</dd>
-    </div>
-  </dl>
+  <div class="mail-meta">
+    <dl>
+      <div>
+        <dt>To</dt>
+        <dd>{{ draft.to or "No recipient found" }}</dd>
+      </div>
+      <div>
+        <dt>Subject</dt>
+        <dd>{{ draft.subject }}</dd>
+      </div>
+      <div>
+        <dt>Attachment</dt>
+        <dd>{{ draft.resume_name or "Resume" }}</dd>
+      </div>
+    </dl>
+    <div class="draft-preview-label">Email preview</div>
+  </div>
 
   <pre>{{ draft.body }}</pre>
 
