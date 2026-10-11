@@ -1,9 +1,24 @@
 const notice = document.querySelector("#notice");
 const currentDraftEl = document.querySelector("#current-draft");
 const draftCount = document.querySelector("#draft-count");
+const leadCount = document.querySelector("#lead-count");
+const contactCount = document.querySelector("#contact-count");
 const resumeLabel = document.querySelector("#resume-label");
 const historyList = document.querySelector("#history-list");
 const needsContactEl = document.querySelector("#needs-contact");
+
+function setButtonBusy(button, busy, label) {
+  if (!button) return;
+  if (busy) {
+    button.dataset.originalLabel = button.textContent;
+    button.textContent = label || "Working...";
+    button.disabled = true;
+  } else {
+    button.textContent = button.dataset.originalLabel || button.textContent;
+    button.disabled = false;
+    delete button.dataset.originalLabel;
+  }
+}
 
 // Tag-input: Enter/comma adds a chip, click "x" removes it. Suggestion list
 // is optional and just a convenience — free-typed values are accepted too.
@@ -324,16 +339,18 @@ document.addEventListener("click", async (event) => {
       formData.set("limit", document.querySelector("#limit").value || "10");
       for (const loc of locationTagInput?.getTags() || []) formData.append("locations", loc);
       for (const role of roleTagInput?.getTags() || []) formData.append("roles", role);
-      target.disabled = true;
+      setButtonBusy(target, true, "Finding...");
       setNotice("Finding internships and contacts. This can take a minute...");
       const data = await postForm("/api/search", formData);
+      if (leadCount) leadCount.textContent = data.internships_count || 0;
+      if (contactCount) contactCount.textContent = data.contacts_count || 0;
       if (data.warning) {
         setNotice(`${data.warning} Showing ${data.internships_count} cached leads and ${data.contacts_count} contacts.`, true);
-        target.disabled = false;
+        setButtonBusy(target, false);
         return;
       }
       setNotice(`Found ${data.internships_count} leads and ${data.contacts_count} contacts.`);
-      window.location.reload();
+      setButtonBusy(target, false);
       return;
     }
 
@@ -348,12 +365,12 @@ document.addEventListener("click", async (event) => {
       }
       const formData = new FormData();
       formData.set("limit", document.querySelector("#limit").value || "10");
-      target.disabled = true;
+      setButtonBusy(target, true, "Drafting...");
       setNotice("Drafting only companies not already in your history...");
       const data = await postForm("/api/draft", formData);
       renderQueue(data);
       setNotice(`Created queue. ${data.pending_count || 0} pending drafts.`);
-      target.disabled = false;
+      setButtonBusy(target, false);
       return;
     }
 
@@ -365,14 +382,14 @@ document.addEventListener("click", async (event) => {
 
     if (action === "remove" || action === "send") {
       const draftId = target.dataset.id;
-      target.disabled = true;
+      setButtonBusy(target, true, action === "send" ? "Sending..." : "Removing...");
       setNotice(action === "send" ? "Sending approved email..." : "Removing draft...");
       await postForm(`/api/drafts/${draftId}/${action}`);
       await refreshQueue();
       setNotice(action === "send" ? "Email sent. Next draft loaded." : "Draft removed. Next draft loaded.");
     }
   } catch (error) {
-    target.disabled = false;
+    setButtonBusy(target, false);
     setNotice(error.message, true);
   }
 });
