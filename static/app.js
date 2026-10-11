@@ -6,6 +6,7 @@ const contactCount = document.querySelector("#contact-count");
 const resumeLabel = document.querySelector("#resume-label");
 const historyList = document.querySelector("#history-list");
 const needsContactEl = document.querySelector("#needs-contact");
+const toastStack = document.querySelector("#toast-stack");
 
 function setButtonBusy(button, busy, label) {
   if (!button) return;
@@ -148,6 +149,24 @@ function setNotice(message, isError = false) {
   if (!notice) return;
   notice.textContent = message;
   notice.classList.toggle("error", isError);
+  showToast(message, isError ? "error" : "info");
+}
+
+function showToast(message, tone = "info") {
+  if (!toastStack || !message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${tone}`;
+  toast.innerHTML = `
+    <span></span>
+    <button type="button" aria-label="Dismiss notification">&times;</button>
+  `;
+  toast.querySelector("span").textContent = message;
+  toast.querySelector("button").addEventListener("click", () => toast.remove());
+  toastStack.append(toast);
+  window.setTimeout(() => {
+    toast.classList.add("leaving");
+    window.setTimeout(() => toast.remove(), 180);
+  }, tone === "error" ? 6500 : 3600);
 }
 
 async function parseResponse(response) {
