@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -61,6 +61,26 @@ def current_user_email() -> str | None:
     return user.get("email")
 
 
+def current_db_user() -> dict[str, Any] | None:
+    email = current_user_email()
+    if not email:
+        return None
+    cache = getattr(g, "_db_users", None)
+    if cache is None:
+        cache = {}
+        g._db_users = cache
+    if email not in cache:
+        cache[email] = repo.get_user(email)
+    return cache[email]
+
+
+def clear_current_db_user_cache() -> None:
+    cache = getattr(g, "_db_users", None)
+    email = current_user_email()
+    if cache is not None and email:
+        cache.pop(email, None)
+
+
 def resume_display_name(resume_path: str | None) -> str | None:
     if not resume_path:
         return None
@@ -80,7 +100,7 @@ def materialize_resume(email: str) -> Path | None:
     run on ephemeral filesystems, so the canonical copy is the encrypted app DB;
     this helper recreates the attachment file when the path is missing.
     """
-    db_user = repo.get_user(email) or {}
+    db_user = current_db_user() or repo.get_user(email) or {}
     resume_path = db_user.get("resume_path")
     if resume_path and Path(resume_path).exists():
         return Path(resume_path)
@@ -100,10 +120,9 @@ def materialize_resume(email: str) -> Path | None:
 
 
 def api_key_status() -> dict[str, bool]:
-    email = current_user_email()
-    if not email:
+    user = current_db_user()
+    if not user:
         return {"gemini": False, "tavily": False, "hunter": False}
-    user = repo.get_user(email) or {}
     return {
         "gemini": bool(user.get("gemini_api_key")),
         "tavily": bool(user.get("tavily_api_key")),
@@ -112,8 +131,7 @@ def api_key_status() -> dict[str, bool]:
 
 
 def user_config(require_search: bool = False, require_draft: bool = False) -> Config:
-    email = current_user_email()
-    user = (repo.get_user(email) if email else None) or {}
+    user = current_db_user() or {}
     gemini_key = user.get("gemini_api_key")
     tavily_key = user.get("tavily_api_key")
     if require_draft and not gemini_key:
@@ -271,6 +289,16 @@ def queue_context() -> dict[str, Any]:
     }
 
 
+def dashboard_context(db_user: dict[str, Any] | None = None) -> dict[str, Any]:
+    db_user = db_user if db_user is not None else current_db_user()
+    resume_path = (db_user or {}).get("resume_path")
+    return {
+        "resume_path": resume_path,
+        "resume_name": user_resume_name(db_user),
+        "api_key_status": api_key_status(),
+    }
+
+
 @app.errorhandler(HTTPException)
 def handle_http_error(exc: HTTPException):
     # Routing errors (404, 405, ...) aren't application failures — a browser
@@ -293,8 +321,8 @@ def handle_error(exc: Exception):
 def index():
     user = signed_in_user()
     signed_in = user is not None
-    db_user = repo.get_user(current_user_email()) if signed_in else None
-    resume_path = (db_user or {}).get("resume_path")
+    db_user = current_db_user() if signed_in else None
+    shell = dashboard_context(db_user) if signed_in else {}
     context = (
         queue_context()
         if signed_in
@@ -305,9 +333,7 @@ def index():
         active_page="queue",
         signed_in=signed_in,
         user=user,
-        resume_path=resume_path,
-        resume_name=user_resume_name(db_user),
-        api_key_status=api_key_status(),
+        **shell,
         internships_count=repo.count_opportunities(),
         contacts_count=repo.count_contacts(),
         saved_locations=(db_user or {}).get("search_locations", []),
@@ -330,16 +356,13 @@ def history_page():
     user = signed_in_user()
     if not user:
         return redirect(url_for("index"))
-    db_user = repo.get_user(current_user_email()) or {}
-    resume_path = db_user.get("resume_path")
+    db_user = current_db_user() or {}
     return render_template(
         "history.html",
         active_page="history",
         signed_in=True,
         user=user,
-        resume_path=resume_path,
-        resume_name=user_resume_name(db_user),
-        api_key_status=api_key_status(),
+        **dashboard_context(db_user),
         history=repo.history(current_user_email()),
     )
 
@@ -349,14 +372,13 @@ def stats_page():
     user = signed_in_user()
     if not user:
         return redirect(url_for("index"))
-    db_user = repo.get_user(current_user_email()) or {}
+    db_user = current_db_user() or {}
     return render_template(
         "stats.html",
         active_page="stats",
         signed_in=True,
         user=user,
-        resume_name=user_resume_name(db_user),
-        api_key_status=api_key_status(),
+        **dashboard_context(db_user),
         stats=aggregate_stats(db),
     )
 
@@ -421,6 +443,7 @@ def upload_resume():
         content=content,
         resume_path=str(path),
     )
+    clear_current_db_user_cache()
     return jsonify({"ok": True, "resume_path": str(path), "resume_name": filename.replace("_", " ")})
 
 
@@ -434,6 +457,7 @@ def save_settings():
         tavily_api_key=request.form.get("tavily_api_key", "").strip() or None,
         hunter_api_key=request.form.get("hunter_api_key", "").strip() or None,
     )
+    clear_current_db_user_cache()
     return jsonify({"ok": True, "api_key_status": api_key_status()})
 
 
