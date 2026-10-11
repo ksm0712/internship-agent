@@ -200,7 +200,13 @@ function escapeHtml(value) {
 
 function renderDraft(draft) {
   if (!draft) {
-    return '<div class="empty">No pending draft. Create drafts to start reviewing.</div>';
+    return `
+      <div class="empty-state">
+        <div class="empty-icon">0</div>
+        <h3>No pending draft</h3>
+        <p>Upload a resume, find leads, then draft emails to start the approval queue.</p>
+      </div>
+    `;
   }
   const disabled = !draft.to || draft.status === "sent" ? "disabled" : "";
   const statusText = String(draft.status || "").replaceAll("_", " ");

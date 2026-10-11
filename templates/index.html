@@ -150,14 +150,23 @@
             <button class="ghost" data-action="refresh">Refresh</button>
           </div>
 
-          <div id="current-draft">
-            {% if current_draft %}
-              {% set draft = current_draft %}
-              {% include "_draft.html" %}
-            {% else %}
-              <div class="empty">No pending draft. Create drafts to start reviewing.</div>
-            {% endif %}
-          </div>
+            <div id="current-draft">
+              {% if current_draft %}
+                {% set draft = current_draft %}
+                {% include "_draft.html" %}
+              {% else %}
+                <div class="empty-state">
+                  <div class="empty-icon">0</div>
+                  <h3>No pending draft</h3>
+                  <p>Upload a resume, find leads, then draft emails to start the approval queue.</p>
+                  <div class="empty-steps">
+                    <span class="{{ 'done' if resume_path else '' }}">Resume</span>
+                    <span class="{{ 'done' if api_key_status.gemini and api_key_status.tavily else '' }}">Keys</span>
+                    <span class="{{ 'done' if contacts_count else '' }}">Contacts</span>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
 
           <div id="needs-contact" class="needs-contact">
             {% if needs_contact %}

@@ -980,6 +980,70 @@ pre {
   font-size: 13px;
 }
 
+.empty-state {
+  display: grid;
+  justify-items: center;
+  margin-top: 18px;
+  padding: 52px 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--muted);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.62)),
+    repeating-linear-gradient(135deg, transparent 0 12px, rgba(229, 222, 212, 0.35) 12px 13px);
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.empty-state p {
+  max-width: 430px;
+  margin-top: 8px;
+  line-height: 1.55;
+}
+
+.empty-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  background: #fff;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.empty-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.empty-steps span {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.empty-steps span.done {
+  color: var(--success);
+  border-color: #b8dcc6;
+  background: var(--success-soft);
+}
+
 .empty.compact {
   margin: 0;
   padding: 16px;
