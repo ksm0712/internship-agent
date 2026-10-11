@@ -302,6 +302,7 @@ def index():
     )
     return render_template(
         "index.html",
+        active_page="queue",
         signed_in=signed_in,
         user=user,
         resume_path=resume_path,
@@ -333,6 +334,7 @@ def history_page():
     resume_path = db_user.get("resume_path")
     return render_template(
         "history.html",
+        active_page="history",
         signed_in=True,
         user=user,
         resume_path=resume_path,
@@ -350,6 +352,7 @@ def stats_page():
     db_user = repo.get_user(current_user_email()) or {}
     return render_template(
         "stats.html",
+        active_page="stats",
         signed_in=True,
         user=user,
         resume_name=user_resume_name(db_user),

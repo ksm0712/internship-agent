@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Internship Agent{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700;750&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    {% if signed_in %}
+      <header class="app-header">
+        <a class="brand-lockup" href="{{ url_for('index') }}">
+          <span class="brand-mark">IA</span>
+          <span>Internship Agent</span>
+        </a>
+        <nav class="top-nav" aria-label="Primary">
+          <a class="{{ 'active' if active_page == 'queue' else '' }}" href="{{ url_for('index') }}">Queue</a>
+          <a class="{{ 'active' if active_page == 'history' else '' }}" href="{{ url_for('history_page') }}">History</a>
+          <a class="{{ 'active' if active_page == 'stats' else '' }}" href="{{ url_for('stats_page') }}">Stats</a>
+        </nav>
+        <div class="account">
+          <div>
+            <strong>{{ user.name or "Google connected" }}</strong>
+            <span>{{ user.email }}</span>
+          </div>
+          <div class="avatar">{{ (user.name or user.email or "K")[0] }}</div>
+          <button class="logout-button" data-action="logout" type="button">Log out</button>
+        </div>
+      </header>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    {% block scripts %}
+      <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% endblock %}
+  </body>
+</html>
