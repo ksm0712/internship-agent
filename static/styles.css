@@ -500,6 +500,11 @@ h3 {
   background: var(--success-soft);
 }
 
+.resume-card.selected:not(.uploaded) {
+  border-color: #d8b36d;
+  background: #fff7e8;
+}
+
 .file-icon {
   display: grid;
   width: 34px;

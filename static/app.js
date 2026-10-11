@@ -4,6 +4,7 @@ const draftCount = document.querySelector("#draft-count");
 const leadCount = document.querySelector("#lead-count");
 const contactCount = document.querySelector("#contact-count");
 const resumeLabel = document.querySelector("#resume-label");
+const resumeCard = document.querySelector("#resume-card");
 const historyList = document.querySelector("#history-list");
 const needsContactEl = document.querySelector("#needs-contact");
 const toastStack = document.querySelector("#toast-stack");
@@ -329,6 +330,15 @@ document.querySelector("#upload-form")?.addEventListener("submit", async (event)
   } catch (error) {
     setNotice(error.message, true);
   }
+});
+
+document.querySelector('#upload-form input[type="file"]')?.addEventListener("change", (event) => {
+  const file = event.currentTarget.files?.[0];
+  if (!file || !resumeLabel || !resumeCard) return;
+  resumeLabel.textContent = file.name.replaceAll("_", " ");
+  resumeCard.classList.add("selected");
+  const resumeSubtext = resumeCard.querySelector("span");
+  if (resumeSubtext) resumeSubtext.textContent = "Selected. Upload to attach it.";
 });
 
 document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
