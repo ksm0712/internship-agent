@@ -328,14 +328,15 @@ def index():
         if signed_in
         else {"drafts": [], "current_draft": None, "pending_count": 0, "needs_contact": [], "history": []}
     )
+    counts = repo.lead_contact_counts()
     return render_template(
         "index.html",
         active_page="queue",
         signed_in=signed_in,
         user=user,
         **shell,
-        internships_count=repo.count_opportunities(),
-        contacts_count=repo.count_contacts(),
+        internships_count=counts["opportunities"],
+        contacts_count=counts["contacts"],
         saved_locations=(db_user or {}).get("search_locations", []),
         saved_roles=(db_user or {}).get("search_roles", []),
         drafts=context["drafts"],
@@ -490,11 +491,12 @@ def api_search():
         if not repo.list_opportunities(limit):
             raise
         warning = friendly_error(exc)
+    counts = repo.lead_contact_counts()
     return jsonify(
         {
             "ok": True,
-            "internships_count": repo.count_opportunities(),
-            "contacts_count": repo.count_contacts(),
+            "internships_count": counts["opportunities"],
+            "contacts_count": counts["contacts"],
             "warning": warning,
         }
     )

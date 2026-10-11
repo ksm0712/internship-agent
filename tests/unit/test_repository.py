@@ -26,6 +26,11 @@ class TestOpportunities:
         repo.upsert_opportunities([{"company": f"C{i}", "role": "Intern"} for i in range(5)])
         assert len(repo.list_opportunities(limit=2)) == 2
 
+    def test_lead_contact_counts(self, repo):
+        repo.upsert_opportunities([{"company": "Acme", "role": "ML Intern"}])
+        repo.upsert_contact({"company": "Acme", "role": "ML Intern", "email": "hr@acme.com"})
+        assert repo.lead_contact_counts() == {"opportunities": 1, "contacts": 1}
+
 
 class TestContacts:
     def test_upsert_and_get_roundtrip(self, repo):

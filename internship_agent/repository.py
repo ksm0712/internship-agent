@@ -144,6 +144,14 @@ class Repository:
             cur.execute("SELECT COUNT(*) AS n FROM contacts")
             return cur.fetchone()["n"]
 
+    def lead_contact_counts(self) -> dict[str, int]:
+        with self.db.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM opportunities")
+            opportunities = cur.fetchone()["n"]
+            cur.execute("SELECT COUNT(*) AS n FROM contacts")
+            contacts = cur.fetchone()["n"]
+        return {"opportunities": opportunities, "contacts": contacts}
+
     def contact_company_names(self) -> list[str]:
         with self.db.cursor() as cur:
             cur.execute("SELECT DISTINCT company FROM contacts")
