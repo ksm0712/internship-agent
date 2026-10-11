@@ -249,6 +249,7 @@ function renderDraft(draft) {
 
       <div class="draft-actions">
         <a class="source" href="${escapeHtml(draft.source_url)}" target="_blank" rel="noreferrer">Source</a>
+        <button class="ghost" data-action="copy" data-id="${draft.id}">Copy</button>
         <button class="ghost" data-action="remove" data-id="${draft.id}">Remove</button>
         <button class="primary" data-action="send" data-id="${draft.id}" ${disabled}>Send</button>
       </div>
@@ -402,6 +403,28 @@ document.addEventListener("click", async (event) => {
     if (action === "refresh") {
       await refreshQueue();
       setNotice("Queue refreshed.");
+      return;
+    }
+
+    if (action === "copy") {
+      const draft = target.closest(".draft");
+      const subject = draft?.querySelector(".mail-meta dl div:nth-child(2) dd")?.textContent || "";
+      const body = draft?.querySelector("pre")?.textContent || "";
+      const text = subject ? `Subject: ${subject}\n\n${body}` : body;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const scratch = document.createElement("textarea");
+        scratch.value = text;
+        scratch.setAttribute("readonly", "");
+        scratch.style.position = "fixed";
+        scratch.style.opacity = "0";
+        document.body.append(scratch);
+        scratch.select();
+        document.execCommand("copy");
+        scratch.remove();
+      }
+      setNotice("Draft copied to clipboard.");
       return;
     }
 
